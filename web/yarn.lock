@@ -497,7 +497,7 @@
     "@babel/runtime" "^7.25.6"
     tslib "^2.5.3"
 
-"@antv/g2@^5.2.10":
+"@antv/g2@5.4.0":
   version "5.4.0"
   resolved "https://registry.npmmirror.com/@antv/g2/-/g2-5.4.0.tgz#3eb08ec7501dfe6dc48785c2c0303dc9eb3bafa9"
   integrity sha512-aNw4lvi9IdsdoMHZbrAhZbFy9y5Ppv6zyjtgTKHdMl8x4xnoweW/4YwryRZh2/2Z497dnobPcVyPu5Iwoz87Ww==
@@ -515,7 +515,7 @@
     flru "^1.0.2"
     pdfast "^0.2.0"
 
-"@antv/g6@^5.0.10":
+"@antv/g6@5.0.49":
   version "5.0.49"
   resolved "https://registry.npmmirror.com/@antv/g6/-/g6-5.0.49.tgz#b44735530cfb1dba1d9c6e31d957b930a52866b2"
   integrity sha512-GRmK8oTVEgxjKbbhThIhnPOV1NcySLcSIGEod9RX/tbX4ME8txESb0zP0fDkuum26GLqvXgmIIIxRBE3m8VYPw==

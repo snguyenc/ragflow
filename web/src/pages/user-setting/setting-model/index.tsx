@@ -54,6 +54,7 @@ import {
   useSubmitTencentCloud,
   useSubmitVolcEngine,
   useSubmityiyan,
+  useSubmitIbmWatson,
 } from './hooks';
 import HunyuanModal from './hunyuan-modal';
 import styles from './index.less';
@@ -63,6 +64,7 @@ import SparkModal from './spark-modal';
 import SystemModelSettingModal from './system-model-setting-modal';
 import VolcEngineModal from './volcengine-modal';
 import YiyanModal from './yiyan-modal';
+import IBMWatsonModal from './ibm-watson-model';
 
 const { Text } = Typography;
 interface IModelCardProps {
@@ -155,7 +157,8 @@ const ModelCard = ({ item, clickApiKey, handleEditModel }: IModelCardProps) => {
                   item.name === LLMFactory.FishAudio ||
                   item.name === LLMFactory.TencentCloud ||
                   item.name === LLMFactory.GoogleCloud ||
-                  item.name === LLMFactory.AzureOpenAI
+                  item.name === LLMFactory.AzureOpenAI ||
+                  item.name === LLMFactory.IBMWatson
                     ? t('addTheModel')
                     : 'API-Key'}
                   <SettingOutlined />
@@ -315,6 +318,14 @@ const UserSettingModel = () => {
     AzureAddingLoading,
   } = useSubmitAzure();
 
+  const {
+    ibmWatsonAddingVisible,
+    hideIbmWatsonAddingModal,
+    showIbmWatsonAddingModal,
+    onIbmWatsonAddingOk,
+    ibmWatsonAddingLoading,
+  } = useSubmitIbmWatson();
+
   const ModalMap = useMemo(
     () => ({
       [LLMFactory.Bedrock]: showBedrockAddingModal,
@@ -326,6 +337,7 @@ const UserSettingModel = () => {
       [LLMFactory.TencentCloud]: showTencentCloudAddingModal,
       [LLMFactory.GoogleCloud]: showGoogleAddingModal,
       [LLMFactory.AzureOpenAI]: showAzureAddingModal,
+      [LLMFactory.IBMWatson]: showIbmWatsonAddingModal,
     }),
     [
       showBedrockAddingModal,
@@ -337,6 +349,7 @@ const UserSettingModel = () => {
       showFishAudioAddingModal,
       showGoogleAddingModal,
       showAzureAddingModal,
+      showIbmWatsonAddingModal,
     ],
   );
 
@@ -577,6 +590,13 @@ const UserSettingModel = () => {
         loading={AzureAddingLoading}
         llmFactory={LLMFactory.AzureOpenAI}
       ></AzureOpenAIModal>
+      <IBMWatsonModal
+        visible={ibmWatsonAddingVisible}
+        hideModal={hideIbmWatsonAddingModal}
+        onOk={onIbmWatsonAddingOk}
+        loading={ibmWatsonAddingLoading}
+        llmFactory={LLMFactory.IBMWatson}
+      ></IBMWatsonModal>
     </section>
   );
 };

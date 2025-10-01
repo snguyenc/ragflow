@@ -417,6 +417,33 @@ export const useSubmitAzure = () => {
   };
 };
 
+export const useSubmitIbmWatson = () => {
+  const { addLlm, loading } = useAddLlm();
+  const {
+    visible: ibmWatsonAddingVisible,
+    hideModal: hideIbmWatsonAddingModal,
+    showModal: showIbmWatsonAddingModal,
+  } = useSetModalState();
+
+  const onIbmWatsonAddingOk = useCallback(
+    async (payload: IAddLlmRequestBody) => {
+      const ret = await addLlm(payload);
+      if (ret === 0) {
+        hideIbmWatsonAddingModal();
+      }
+    },
+    [hideIbmWatsonAddingModal, addLlm],
+  );
+
+  return {
+    ibmWatsonAddingLoading: loading,
+    onIbmWatsonAddingOk,
+    ibmWatsonAddingVisible,
+    hideIbmWatsonAddingModal,
+    showIbmWatsonAddingModal,
+  };
+};
+
 export const useHandleDeleteLlm = (llmFactory: string) => {
   const { deleteLlm } = useDeleteLlm();
   const showDeleteConfirm = useShowDeleteConfirm();

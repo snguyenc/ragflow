@@ -24,7 +24,6 @@ from rag.utils import rmSpace, get_float
 from rag.nlp import rag_tokenizer, query
 import numpy as np
 from rag.utils.doc_store_conn import DocStoreConnection, MatchDenseExpr, FusionExpr, OrderByExpr
-from underthesea import word_tokenize
 
 def index_name(uid): return f"ragflow_{uid}"
 
@@ -323,7 +322,6 @@ class Dealer:
                         vtweight=0.7, cfield="content_ltks",
                         rank_feature: dict | None = None):
         _, keywords = self.qryr.question(query)
-        #keywords = word_tokenize(query)
         print("rerank_by_model: token question", query," -- ", keywords)
         for i in sres.ids:
             if isinstance(sres.field[i].get("important_kwd", []), str):

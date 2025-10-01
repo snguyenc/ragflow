@@ -194,6 +194,9 @@ def add_llm():
     elif factory == "Azure-OpenAI":
         api_key = apikey_json(["api_key", "api_version"])
 
+    elif factory == "IBM-Watson":
+        api_key = apikey_json(["api_key", "api_version", "project_id"])    
+
     llm = {
         "tenant_id": current_user.id,
         "llm_factory": factory,

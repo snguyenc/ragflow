@@ -37,6 +37,7 @@ class SupportedLiteLLMProvider(StrEnum):
     TogetherAI = "TogetherAI"
     Anthropic = "Anthropic"
     Ollama = "Ollama"
+    IBM_WatsonX = "IBM-Watson"
     Meituan = "Meituan"
     CometAPI = "CometAPI"
     SILICONFLOW = "SILICONFLOW"
@@ -87,6 +88,7 @@ LITELLM_PROVIDER_PREFIX = {
     SupportedLiteLLMProvider.TogetherAI: "together_ai/",
     SupportedLiteLLMProvider.Anthropic: "",  # don't need a prefix
     SupportedLiteLLMProvider.Ollama: "ollama_chat/",
+    SupportedLiteLLMProvider.IBM_WatsonX: "watsonx/",
     SupportedLiteLLMProvider.Meituan: "openai/",
     SupportedLiteLLMProvider.CometAPI: "openai/",
     SupportedLiteLLMProvider.SILICONFLOW: "openai/",

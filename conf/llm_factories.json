@@ -4878,6 +4878,28 @@
                     "is_tools": true
                 }
             ]
+        },
+        {
+            "name": "IBM-Watson",
+            "logo": "",
+            "tags": "LLM,TEXT EMBEDDING,TEXT RE-RANK",
+            "status": "1",
+            "llm": [
+                {
+                    "llm_name": "openai/gpt-oss-120b",
+                    "tags": "LLM,CHAT,128K",
+                    "max_tokens": 128000,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "openai/gpt-oss-20b",
+                    "tags": "LLM,CHAT,128K",
+                    "max_tokens": 128000,
+                    "model_type": "chat",
+                    "is_tools": true
+                }
+            ]
         }
     ]
 }

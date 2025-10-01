@@ -14,6 +14,7 @@ export enum LLMFactory {
   MiniMax = 'MiniMax',
   Mistral = 'Mistral',
   AzureOpenAI = 'Azure-OpenAI',
+  IBMWatson = 'IBM-Watson',
   Bedrock = 'Bedrock',
   Gemini = 'Gemini',
   Groq = 'Groq',
@@ -119,4 +120,5 @@ export const IconMap = {
   [LLMFactory.TokenPony]: 'token-pony',
   [LLMFactory.Meituan]: 'longcat',
   [LLMFactory.CometAPI]: 'cometapi',
+  [LLMFactory.IBMWatson]: 'watsonx',
 };

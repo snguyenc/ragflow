@@ -1303,6 +1303,7 @@ class LiteLLMBase(ABC):
         "01.AI",
         "GiteeAI",
         "302.AI",
+        "IBM-Watson",
     ]
 
     def __init__(self, key, model_name, base_url=None, **kwargs):
@@ -1325,6 +1326,12 @@ class LiteLLMBase(ABC):
             self.bedrock_ak = json.loads(key).get("bedrock_ak", "")
             self.bedrock_sk = json.loads(key).get("bedrock_sk", "")
             self.bedrock_region = json.loads(key).get("bedrock_region", "")
+        elif self.provider == SupportedLiteLLMProvider.IBM_WatsonX:
+            jsonKey = json.loads(key)
+            self.watsonx_ak = jsonKey.get("api_key", "")
+            self.watsonx_vs = jsonKey.get("api_version", "")
+            self.watsonx_project_id = jsonKey.get("project_id", "")
+
 
     def _get_delay(self):
         """Calculate retry delay time"""
@@ -1354,7 +1361,11 @@ class LiteLLMBase(ABC):
 
     def _clean_conf(self, gen_conf):
         if "max_tokens" in gen_conf:
-            del gen_conf["max_tokens"]
+            if self.model_name.lower().find("openai/gpt-oss-120b") < 0:
+                del gen_conf["max_tokens"]
+
+        print("gen_conf", gen_conf)
+        
         return gen_conf
 
     def _chat(self, history, gen_conf, **kwargs):
@@ -1363,6 +1374,8 @@ class LiteLLMBase(ABC):
             kwargs["extra_body"] = {"enable_thinking": False}
 
         completion_args = self._construct_completion_args(history=history, stream=False, tools=False, **gen_conf)
+        
+        #litellm.set_verbose=True
         response = litellm.completion(
             **completion_args,
             drop_params=True,
@@ -1383,6 +1396,8 @@ class LiteLLMBase(ABC):
         reasoning_start = False
 
         completion_args = self._construct_completion_args(history=history, stream=True, tools=False, **gen_conf)
+        #print("lite completion_args", completion_args)
+
         stop = kwargs.get("stop")
         if stop:
             completion_args["stop"] = stop
@@ -1520,6 +1535,16 @@ class LiteLLMBase(ABC):
                     "aws_region_name": self.bedrock_region,
                 }
             )
+        elif self.provider == SupportedLiteLLMProvider.IBM_WatsonX:
+            completion_args.pop("api_key", None)
+            completion_args.update(
+                {   "api_base": self.base_url,
+                    "api_key": self.watsonx_ak,
+                    "api_version": self.watsonx_vs,
+                    "project_id": self.watsonx_project_id,
+                    "max_tokens": completion_args.get("max_tokens", 128000),
+                }
+            )    
         return completion_args
 
     def chat_with_tools(self, system: str, history: list, gen_conf: dict = {}):
