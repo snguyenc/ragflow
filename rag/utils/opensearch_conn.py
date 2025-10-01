@@ -206,7 +206,7 @@ class OSConnection(DocStoreConnection):
                 knn_query[vector_column_name]["vector"] = list(m.embedding_data)
                 knn_query[vector_column_name]["k"] = m.topn
                 knn_query[vector_column_name]["filter"] = bqry.to_dict()
-                #knn_query[vector_column_name]["boost"] = similarity
+                knn_query[vector_column_name]["boost"] = 0.5
 
         if bqry and rank_feature:
             for fld, sc in rank_feature.items():
@@ -407,6 +407,7 @@ class OSConnection(DocStoreConnection):
     def delete(self, condition: dict, indexName: str, knowledgebaseId: str) -> int:
         qry = None
         assert "_id" not in condition
+        condition["kb_id"] = knowledgebaseId
         if "id" in condition:
             chunk_ids = condition["id"]
             if not isinstance(chunk_ids, list):
