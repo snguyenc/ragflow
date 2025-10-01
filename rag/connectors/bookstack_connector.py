@@ -22,7 +22,7 @@ import xxhash
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 from io import BytesIO
-
+from functools import partial
 from rag.connectors.bookstack_client import BookStackClient, BookStackClientError
 
 
@@ -103,10 +103,11 @@ class BookStackConnector:
                  token_id: str,
                  token_secret: str,
                  batch_size: int = 50,
-                 include_books: bool = True,
-                 include_chapters: bool = True,
-                 include_pages: bool = True,
-                 include_shelves: bool = True):
+                 include_books: bool = False,
+                 include_chapters: bool = False,
+                 include_pages: bool = False,
+                 include_shelves: bool = False,
+                 include_book_to_chapters: bool = False):
         """
         Initialize BookStack connector
 
@@ -119,6 +120,7 @@ class BookStackConnector:
             include_chapters: Whether to include chapters
             include_pages: Whether to include pages
             include_shelves: Whether to include shelves
+            include_book_to_chapters: Whether to include book to chapters
         """
         self.client = BookStackClient(base_url, token_id, token_secret)
         self.batch_size = batch_size
@@ -126,6 +128,7 @@ class BookStackConnector:
         self.include_chapters = include_chapters
         self.include_pages = include_pages
         self.include_shelves = include_shelves
+        self.include_book_to_chapters = include_book_to_chapters
 
     def test_connection(self) -> Tuple[bool, Optional[str]]:
         """
@@ -173,6 +176,35 @@ class BookStackConnector:
 
     def _book_to_document(self, book_data: Dict[str, Any]) -> BookStackDocument:
         """Convert BookStack book to document"""
+        book_id = str(book_data.get('id', ''))
+        title = str(book_data.get('name', 'Untitled Book'))
+        description = str(book_data.get('description', ''))
+
+        content = f"{title}\n\n{description}"
+        url = self.client.build_app_url(f"/books/{book_data.get('slug', book_id)}")
+
+        updated_at = None
+        if book_data.get('updated_at'):
+            try:
+                updated_at = datetime.fromisoformat(str(book_data['updated_at']).replace('Z', '+00:00'))
+            except ValueError:
+                pass
+
+        return BookStackDocument(
+            doc_id=f"bookstack_book_{book_id}",
+            title=title,
+            content=content,
+            url=url,
+            doc_type="book",
+            updated_at=updated_at,
+            metadata={
+                "bookstack_id": book_id,
+                "description": description
+            }
+        )
+
+    def _book_to_chapters(self, book_data: Dict[str, Any]) -> List[BookStackDocument]:
+        """Convert BookStack book to chapters"""
         book_id = str(book_data.get('id', ''))
         title = str(book_data.get('name', 'Untitled Book'))
         description = str(book_data.get('description', ''))
@@ -312,6 +344,7 @@ class BookStackConnector:
     def fetch_documents(self,
                        updated_since: Optional[datetime] = None,
                        updated_until: Optional[datetime] = None,
+                       book_names: Optional[List[str]] = None,
                        progress_callback=None) -> Iterator[List[BookStackDocument]]:
         """
         Fetch documents from BookStack
@@ -319,13 +352,14 @@ class BookStackConnector:
         Args:
             updated_since: Only fetch documents updated after this date
             updated_until: Only fetch documents updated before this date
+            book_names: List of book names to fetch documents from
             progress_callback: Progress callback function
 
         Yields:
             Batches of BookStackDocument objects
         """
-        total_fetched = 0
 
+        total_fetched = 0
         # Define content types to fetch
         content_types = []
         if self.include_books:
@@ -336,7 +370,11 @@ class BookStackConnector:
             content_types.append(("pages", self._page_to_document, self.client.get_pages))
         if self.include_shelves:
             content_types.append(("shelves", self._shelf_to_document, self.client.get_shelves))
-
+        if self.include_book_to_chapters:
+            # Special handling for chapters_of_books since it needs book_names parameter
+            get_chapters_from_books_fetcher = partial(self.client.get_chapters_from_books, book_names)
+            content_types.append(("chapters_of_books", self._book_to_chapters, get_chapters_from_books_fetcher))
+            
         for content_type, converter, fetcher in content_types:
             if progress_callback:
                 progress_callback(0, f"Fetching {content_type} from BookStack...")
@@ -344,13 +382,14 @@ class BookStackConnector:
             offset = 0
             while True:
                 try:
-                    # Fetch batch of items
                     items = fetcher(
                         count=self.batch_size,
                         offset=offset,
                         updated_since=updated_since,
                         updated_until=updated_until
                     )
+
+                    print("items", items)
 
                     if not items:
                         break
@@ -419,3 +458,28 @@ class BookStackConnector:
 
         json_data = json.dumps(data, ensure_ascii=False, indent=2)
         return BytesIO(json_data.encode('utf-8'))
+
+
+if __name__ == "__main__":
+    # Initialize connector   
+    connector = BookStackConnector(
+        base_url="https://knowledge.demo.securityzone.vn",
+        token_id="GyEiV5NkEZ8ytCgSH4hXvB7BVwZQ9knP",
+        token_secret="puKhXEpOAarRvE3A7jvDdUE9pB204fXt",
+        batch_size=50,
+        include_book_to_chapters=True,
+    )
+
+    print("global_config", "global_config")
+    try:
+        print("About to call fetch_documents()")
+        result = connector.fetch_documents(book_names=["Thẻ tín dụng"])
+        print("fetch_documents() returned:", type(result))
+        # Since it returns an Iterator, we need to iterate
+        for batch in result:
+            print(f"Got batch with {len(batch)} documents")
+            break  # Just test first batch
+    except Exception as e:
+        print(f"Error calling fetch_documents(): {e}")
+        import traceback
+        traceback.print_exc()

@@ -150,6 +150,51 @@ class BookStackClient:
         response = self._make_request('/books', params)
         return response.get('data', [])
 
+    def get_chapters_from_books(self, book_names: List[str], count: int = 50, offset: int = 0,
+                  updated_since: Optional[datetime] = None,
+                  updated_until: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        """
+        Fetch chapters from BookStack
+
+        Args:
+            count: Number of books to fetch
+            offset: Offset for pagination
+            updated_since: Only fetch books updated after this date
+            updated_until: Only fetch books updated before this date
+
+        Returns:
+            List of book data
+        """
+
+        book_ids = []
+        books = self.get_books(count=count, offset=offset, updated_since=updated_since, updated_until=updated_until)
+        book_map = {book['name']: book['id'] for book in books}
+
+        for book_name in book_names:
+            if book_name in book_map:
+                book_ids.append(book_map[book_name])
+            else:
+                logging.warning(f"Book '{book_name}' not found")
+
+        if not book_ids:
+            return []
+        
+        params = {
+            'count': str(count),
+            'offset': str(offset),
+            'sort': '+id'
+        }
+
+        if updated_since:
+            params['filter[updated_at:gte]'] = updated_since.strftime('%Y-%m-%d')
+        if updated_until:
+            params['filter[updated_at:lte]'] = updated_until.strftime('%Y-%m-%d')
+
+        chapters = self.get_chapters(count=count, offset=offset, updated_since=updated_since, updated_until=updated_until)
+        chapters = [chapter for chapter in chapters if chapter['book_id'] in book_ids]   
+
+        return chapters
+
     def get_chapters(self, count: int = 50, offset: int = 0,
                     updated_since: Optional[datetime] = None,
                     updated_until: Optional[datetime] = None) -> List[Dict[str, Any]]:

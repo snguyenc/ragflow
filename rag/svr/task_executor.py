@@ -534,7 +534,7 @@ async def run_raptor(row, chat_mdl, embd_mdl, vector_size, callback=None):
     return res, tk_count
 
 
-async def fetch_bookstack_content(bookstack_config, kb_id, tenant_id, progress_callback, doc_id=None, booknames_filter=None):
+async def fetch_bookstack_content(bookstack_config, kb_id, tenant_id, progress_callback, doc_id=None, booknames_filter=None, return_raw=False):
     """
     Fetch content from BookStack - can be used standalone
 
@@ -619,11 +619,6 @@ async def fetch_bookstack_content(bookstack_config, kb_id, tenant_id, progress_c
         ):
             # Convert documents to RAGFlow chunks
             for document in document_batch:
-                # Filter by booknames if specified
-                if booknames_filter:
-                    doc_title = document.title.lower()
-                    if not any(bookname.lower() in doc_title for bookname in booknames_filter):
-                        continue
 
                 chunk = document.to_ragflow_chunk(
                     kb_id=kb_id,
