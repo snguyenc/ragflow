@@ -275,7 +275,7 @@ async def build_chunks(task, progress_callback):
         async with chunk_limiter:
             cks = await trio.to_thread.run_sync(lambda: chunker.chunk(task["name"], binary=binary, from_page=task["from_page"],
                                 to_page=task["to_page"], lang=task["language"], callback=progress_callback,
-                                kb_id=task["kb_id"], parser_config=task["parser_config"], tenant_id=task["tenant_id"]))
+                                kb_id=task["kb_id"], parser_config=task["parser_config"], tenant_id=task["tenant_id"], doc_id=task["doc_id"]))
         logging.info("Chunking({}) {}/{} done".format(timer() - st, task["location"], task["name"]))
     except TaskCanceledException:
         raise
@@ -669,6 +669,7 @@ async def do_handle_task(task):
         chunk_ids = [chunk["id"] for chunk in chunks[:b + DOC_BULK_SIZE]]
         chunk_ids_str = " ".join(chunk_ids)
         try:
+            print("update chunk_ids", task["id"], chunk_ids_str)
             TaskService.update_chunk_ids(task["id"], chunk_ids_str)
         except DoesNotExist:
             logging.warning(f"do_handle_task update_chunk_ids failed since task {task['id']} is unknown.")

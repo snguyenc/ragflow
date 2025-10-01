@@ -11,6 +11,7 @@ from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.file_service import FileService
 from api.db.services.task_service import queue_tasks, incremental_queue_tasks
 from api.db.services.file2document_service import File2DocumentService
+from api.db.services.task_service import TaskService
 
 async def run_bookstack_chapter_doc(task, progress_callback):
     """
@@ -118,6 +119,9 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                 if existing_docs:
                     chapter_document = existing_docs[0]
                     chapter_docs = chapter_document.to_dict()
+                    #keep updated_at for run job
+                    from datetime import timezone
+                    parser_config["updated_at"] = chapter_docs.get("update_date").astimezone(tz=timezone.utc).isoformat()
                     DocumentService.update_parser_config(chapter_document.id, parser_config)
                     logging.info(f"Chapter document {bookstack_doc.title} already exists, using existing...")
 
@@ -195,13 +199,35 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
         callback(0.3, "Fetching chapter pages from BookStack...")
 
         # Get chapter ID from parser config
+        tenant_id = kwargs.get("tenant_id")
+        kb_id = kwargs.get("kb_id")
+        doc_id = kwargs.get("doc_id")
+
         chapter_id = parser_config.get("source_chapter_id")
+        updated_at_str = parser_config.get("updated_at")
+
         if not chapter_id:
-            raise ValueError("source_chapter_id not found in parser_config")
+            raise ValueError("doc_id not found in parser_config")
+        has, doc = DocumentService.get_by_id(doc_id)
+        if not has:
+            callback(-1, f"Document {doc_id} not found")
+            return []
+        
+        doc = doc.to_dict()    
+        prev_tasks = TaskService.get_tasks(doc_id)
+        pre_chunk_ids = []
+        if prev_tasks:
+            for pre_task in prev_tasks:
+                pre_chunk_ids.extend(pre_task["chunk_ids"].split())
+            
+        
+        updated_at = datetime.fromisoformat(updated_at_str) if len(pre_chunk_ids) > 0 and updated_at_str else None
 
         doc_count = 0
         docs = []
-        for batch in connector.fetch_documents(chapter_id=chapter_id):
+
+        
+        for batch in connector.fetch_documents(chapter_id=chapter_id, updated_since=updated_at):
             for bookstack_doc in batch:
                 doc_count += 1
                 callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
@@ -210,7 +236,13 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
                     **parser_config
                 }
                 docs.append(bookstack_doc)
-        
+                # check and delete old chunk
+                if settings.docStoreConn.indexExist(search.index_name(tenant_id), kb_id):
+                    logging.info(f"Delete old chunk: {bookstack_doc.metadata['chapter_id']}, {bookstack_doc.metadata['page_id']}")
+                    settings.docStoreConn.delete({"doc_id": doc_id, "chapter_id": bookstack_doc.metadata['chapter_id'], "page_id": bookstack_doc.metadata['page_id']}, 
+                    search.index_name(tenant_id), kb_id)
+
+        logging.info(f"Fetching pages from BookStack: {updated_at}, {docs}")
         return docs
 
     except Exception as e:

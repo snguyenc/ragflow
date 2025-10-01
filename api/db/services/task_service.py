@@ -450,14 +450,43 @@ def incremental_queue_tasks(doc: dict, bucket: str, name: str, priority: int):
 
     parse_task_array = []
 
-    
+    task = None
     if doc["parser_id"] == "bookstack":
         task = new_task()
         task["task_type"] = doc["parser_id"]
         task["to_page"] = 1
         parse_task_array.append(task)
     else:
-        parse_task_array.append(new_task())
+        task = new_task()
+        parse_task_array.append(task)
+
+    chunking_config = DocumentService.get_chunking_config(doc["id"])
+    for task in parse_task_array:
+        hasher = xxhash.xxh64()
+        for field in sorted(chunking_config.keys()):
+            if field == "parser_config":
+                for k in ["raptor", "graphrag"]:
+                    if k in chunking_config[field]:
+                        del chunking_config[field][k]
+            hasher.update(str(chunking_config[field]).encode("utf-8"))
+        for field in ["doc_id", "from_page", "to_page"]:
+            hasher.update(str(task.get(field, "")).encode("utf-8"))
+        task_digest = hasher.hexdigest()
+        task["digest"] = task_digest
+        task["progress"] = 0.0
+        task["priority"] = priority
+
+    prev_tasks = TaskService.get_tasks(doc["id"])
+    pre_chunk_ids = []
+    if prev_tasks:
+        for pre_task in prev_tasks:
+            pre_chunk_ids.extend(pre_task["chunk_ids"].split())
+        TaskService.filter_delete([Task.doc_id == doc["id"]])
+
+    if len(pre_chunk_ids) > 0:
+        task["chunk_ids"] = " ".join(pre_chunk_ids)
+
+    print(">>> parse_task_array:", parse_task_array)   
 
     bulk_insert_into_db(Task, parse_task_array, True)
     DocumentService.begin2parse(doc["id"])
