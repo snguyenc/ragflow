@@ -197,7 +197,7 @@ const routes = [
     layout: false,
     component: `@/pages${Routes.Chats}/chat`,
   },
-  {
+  /*{
     path: Routes.Searches,
     layout: false,
     component: '@/layouts/next',
@@ -243,7 +243,7 @@ const routes = [
     path: Routes.AgentTemplates,
     layout: false,
     component: `@/pages${Routes.Agents}${Routes.AgentTemplates}`,
-  },
+  },*/
   {
     path: Routes.Files,
     layout: false,

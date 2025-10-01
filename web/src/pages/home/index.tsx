@@ -9,7 +9,7 @@ const Home = () => {
         <NextBanner></NextBanner>
         <section className="h-[calc(100dvh-260px)] overflow-auto scrollbar-thin">
           <Datasets></Datasets>
-          <Applications></Applications>
+          {false && <Applications></Applications>}
         </section>
       </section>
     </div>

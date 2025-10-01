@@ -18,6 +18,9 @@
       "prettier --write --ignore-unknown"
     ]
   },
+  "overrides": {
+    "@radix-ui/react-dismissable-layer": "1.1.4"
+  },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
     "@ant-design/pro-components": "^2.6.46",
@@ -27,6 +30,7 @@
     "@hookform/resolvers": "^3.9.1",
     "@js-preview/excel": "^1.7.14",
     "@lexical/react": "^0.23.1",
+    "@monaco-editor/loader": "^1.5.0",
     "@monaco-editor/react": "^4.6.0",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.4",
@@ -81,6 +85,7 @@
     "lodash": "^4.17.21",
     "lucide-react": "^0.542.0",
     "mammoth": "^1.7.2",
+    "monaco-editor": "^0.53.0",
     "next-themes": "^0.4.6",
     "openai-speech-stream-player": "^1.0.8",
     "pptx-preview": "^1.0.5",
@@ -165,8 +170,5 @@
   },
   "engines": {
     "node": ">=18.20.4"
-  },
-  "overrides": {
-    "@radix-ui/react-dismissable-layer": "1.1.4"
   }
 }

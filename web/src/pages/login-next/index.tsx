@@ -34,7 +34,7 @@ export function SignUpCard() {
         <SignUpForm></SignUpForm>
         <div className="text-center">
           <Button variant={'link'} className="pt-6" onClick={switchStep}>
-            Already have an account? Log In
+            Already have an account? Log In ds
           </Button>
         </div>
         <LoginFooter></LoginFooter>
