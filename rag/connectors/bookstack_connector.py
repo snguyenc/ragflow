@@ -40,6 +40,7 @@ class BookStackDocument:
                  url: str,
                  doc_type: str,
                  updated_at: Optional[datetime] = None,
+                 created_at: Optional[datetime] = None,
                  metadata: Optional[Dict[str, Any]] = None):
         self.doc_id = doc_id
         self.title = title
@@ -47,6 +48,7 @@ class BookStackDocument:
         self.url = url
         self.doc_type = doc_type
         self.updated_at = updated_at
+        self.created_at = created_at
         self.metadata = metadata or {}
 
     def to_ragflow_chunk(self, kb_id: str, tenant_id: str) -> Dict[str, Any]:
@@ -240,7 +242,7 @@ class BookStackConnector:
             updated_at=updated_at,
             created_at=created_at,
             metadata={
-                "bookstack_id": chapter_id,
+                "chapter_id": chapter_id,
                 "book_id": str(chapter_data.get('book_id', '')),
                 "description": description
             }
@@ -351,18 +353,19 @@ class BookStackConnector:
         total_fetched = 0
         # Define content types to fetch
         content_types = []
+        if self.include_shelves:
+            content_types.append(("shelves", self._shelf_to_document, self.client.get_shelves))
+
+        if self.include_book_to_chapters:
+            # Special handling for chapters_of_books since it needs book_names parameter
+            get_chapters_from_books_fetcher = partial(self.client.get_chapters_from_books, book_names)
+            content_types.append(("chapters_of_books", self._chapter_to_document, get_chapters_from_books_fetcher))    
         if self.include_books:
             content_types.append(("books", self._book_to_document, self.client.get_books))
         if self.include_chapters:
             content_types.append(("chapters", self._chapter_to_document, self.client.get_chapters))
         if self.include_pages:
             content_types.append(("pages", self._page_to_document, self.client.get_pages))
-        if self.include_shelves:
-            content_types.append(("shelves", self._shelf_to_document, self.client.get_shelves))
-        if self.include_book_to_chapters:
-            # Special handling for chapters_of_books since it needs book_names parameter
-            get_chapters_from_books_fetcher = partial(self.client.get_chapters_from_books, book_names)
-            content_types.append(("chapters_of_books", self._chapter_to_document, get_chapters_from_books_fetcher))
             
         for content_type, converter, fetcher in content_types:
             if progress_callback:

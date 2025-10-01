@@ -616,12 +616,10 @@ async def do_handle_task(task):
         token_count = 100
     elif task_type == "bookstack_chapter_doc":
         start_ts = timer()
-        chunks = await run_bookstack_chapter_doc(task, progress_callback)
-        if not chunks:
-            progress_callback(prog=1.0, msg="No chapters fetched from BookStack")
-            return
-        progress_callback(prog=1.0, msg="Fetched {} chapter chunks from BookStack ({:.2f}s)".format(len(chunks), timer() - start_ts))
-        token_count = 100
+        chapter_count = await run_bookstack_chapter_doc(task, progress_callback)
+        progress_callback(prog=1.0, msg="Done fetched {} chapters from BookStack ({:.2f}s)".format(chapter_count, timer() - start_ts))
+        DocumentService.increment_chunk_num(task_doc_id, task_dataset_id, 0, chapter_count, timer() - start_ts)
+        return
     else:
         # Standard chunking methods
         start_ts = timer()

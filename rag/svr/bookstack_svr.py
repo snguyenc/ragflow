@@ -2,12 +2,13 @@ from api.db.services.document_service import DocumentService
 from api.db import FileType
 from api.utils import get_uuid
 from rag.nlp import rag_tokenizer
-import settings
+from api import settings
 from rag.nlp import search
 from rag.connectors.bookstack_connector import BookStackConnector
 import logging
 from datetime import datetime
-
+from api.db.services.knowledgebase_service import KnowledgebaseService
+from api.db.services.file_service import FileService
 
 
 async def run_bookstack_connector(task, embedding_model, progress_callback):
@@ -77,7 +78,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
             token_id=global_config["token_id"],
             token_secret=global_config["token_secret"],
             batch_size=50,
-            include_book_to_chapters=True
+            include_book_to_chapters=True  # Primary method for book filtering
         )
 
         progress_callback(0.3, "Testing BookStack connection...")
@@ -87,119 +88,53 @@ async def run_bookstack_chapter_doc(task, progress_callback):
 
         progress_callback(0.4, "Fetching chapters from BookStack...")
 
-        # Fetch chapters for specified books
-        all_chunks = []
-        chapter_count = 0
+        # Fetch chapters and pages for specified books
+        doc_count = 0
 
         for batch in connector.fetch_documents(book_names=booknames):
-            for chapter_doc in batch:
-                chapter_count += 1
-                progress_callback(0.4 + 0.4 * chapter_count / 100, f"Processing chapter: {chapter_doc.title}")
+            for bookstack_doc in batch:
+                doc_count += 1
+                progress_callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
 
                 # Create document for this chapter
                 chapter_doc_data = {
                     "id": get_uuid(),
                     "kb_id": kb_id,
                     "parser_id": "bookstack",
-                    "parser_config": {"chapter_id": chapter_doc.doc_id, "parent_id": doc_id},
+                    "parser_config": {"source_chapter_id": bookstack_doc.doc_id, "booknames": booknames},
                     "created_by": "task_executor",
                     "type": FileType.DOC,
-                    "name": chapter_doc.title,
+                    "name": f"Chapter: {bookstack_doc.title}",
                     "suffix": "chapter",
-                    "location": f"{doc_id}-{chapter_doc.doc_id}",
-                    "size": len(chapter_doc.content.encode('utf-8')) if chapter_doc.content else 0,
+                    "location": bookstack_doc.url,
+                    "metafields": {
+                        "created_at": bookstack_doc.created_at,
+                        "updated_at": bookstack_doc.updated_at,
+                        **bookstack_doc.metadata,
+                    },
+                    "size": len(bookstack_doc.content.encode('utf-8')) if bookstack_doc.content else 0,
                 }
 
+                # Check if chapter document already exists
                 existing_docs = list(DocumentService.model.select().where(
-                    DocumentService.model.kb_id == kb["id"],
+                    DocumentService.model.kb_id == kb_id,
                     DocumentService.model.type == FileType.DOC,
                     DocumentService.model.parser_id == "bookstack",
-                    DocumentService.model.location == f"{doc_id}-{chapter_doc.doc_id}"
+                    DocumentService.model.location == bookstack_doc.url
                 ))
 
                 if existing_docs:
-                    logging.info(f"Chapter document {chapter_doc.title} already exists, skipping...")
-                    info = {"run": str(1), "progress": 0, "progress_msg": "", "chunk_num": 0, "token_num": 0}
-                    DocumentService.update_by_id(existing_docs[0].id, info)
+                    chapter_document = existing_docs[0]
+                    logging.info(f"Chapter document {bookstack_doc.title} already exists, using existing...")
                 else:
-                    # Insert chapter document
+                    # Insert new chapter document
                     chapter_document = DocumentService.insert(chapter_doc_data)
-                    logging.info(f"Created chapter document: {chapter_document.id} for chapter: {chapter_doc.title}")
+                    # Add to file system
+                    kb_folder = FileService.get_kb_folder(tenant_id)
+                    FileService.add_file_from_kb(chapter_document.to_dict(), kb_folder["id"], tenant_id)
+                    logging.info(f"Created chapter document: {chapter_document.id} for chapter: {bookstack_doc.title}")
 
-                # Get pages for this chapter
-                progress_callback(0.4 + 0.4 * chapter_count / 100, f"Fetching pages for chapter: {chapter_doc.title}")
-
-                try:
-                    # Get chapter pages
-                    chapter_id = chapter_doc.doc_id
-                    pages = connector.client.get_pages_from_chapter(chapter_id)
-
-                    # Create chunks from pages
-                    page_chunks = []
-                    for page in pages:
-                        if page.get('html') or page.get('markdown'):
-                            content = page.get('markdown', '') or page.get('html', '')
-
-                            # Create chunk for this page
-                            chunk = {
-                                "id": get_uuid(),
-                                "doc_id": chapter_document.id,
-                                "kb_id": [kb_id],
-                                "docnm_kwd": chapter_document.name,
-                                "title_tks": rag_tokenizer.tokenize(page.get('name', '')),
-                                "content_ltks": rag_tokenizer.tokenize(content),
-                                "content_with_weight": content,
-                                "page_num": page.get('priority', 0),
-                                "source_type": "bookstack_page",
-                                "source_id": str(page.get('id', '')),
-                                "create_time": str(datetime.now()).replace("T", " ")[:19],
-                                "create_timestamp_flt": datetime.now().timestamp()
-                            }
-                            page_chunks.append(chunk)
-
-                    # Add chunks to collection
-                    all_chunks.extend(page_chunks)
-                    logging.info(f"Created {len(page_chunks)} chunks from {len(pages)} pages for chapter: {chapter_doc.title}")
-
-                except Exception as page_error:
-                    logging.warning(f"Failed to get pages for chapter {chapter_doc.title}: {str(page_error)}")
-                    # Create single chunk from chapter content if pages fail
-                    if chapter_doc.content:
-                        chunk = {
-                            "id": get_uuid(),
-                            "doc_id": chapter_document.id,
-                            "kb_id": [kb_id],
-                            "docnm_kwd": chapter_document.name,
-                            "title_tks": rag_tokenizer.tokenize(chapter_doc.title),
-                            "content_ltks": rag_tokenizer.tokenize(chapter_doc.content),
-                            "content_with_weight": chapter_doc.content,
-                            "page_num": 0,
-                            "source_type": "bookstack_chapter",
-                            "source_id": chapter_doc.doc_id,
-                            "create_time": str(datetime.now()).replace("T", " ")[:19],
-                            "create_timestamp_flt": datetime.now().timestamp()
-                        }
-                        all_chunks.append(chunk)
-
-        progress_callback(0.8, f"Created {chapter_count} chapter documents with {len(all_chunks)} total chunks")
-
-        # Store chunks in document store
-        if all_chunks:
-            progress_callback(0.9, "Storing chunks in document store...")
-            idxnm = search.index_name(tenant_id)
-
-            # Ensure index exists
-            if not settings.docStoreConn.indexExist(idxnm, kb_id):
-                settings.docStoreConn.createIdx(idxnm, kb_id, 1536)  # Default vector size
-
-            # Insert chunks in batches
-            batch_size = 64
-            for i in range(0, len(all_chunks), batch_size):
-                batch = all_chunks[i:i + batch_size]
-                settings.docStoreConn.insert(batch, idxnm, kb_id)
-
-        progress_callback(1.0, f"BookStack sync complete: {chapter_count} chapters, {len(all_chunks)} chunks")
-        return all_chunks
+        return doc_count
 
     except Exception as e:
         progress_callback(-1, f"BookStack chapter fetch failed: {str(e)}")
