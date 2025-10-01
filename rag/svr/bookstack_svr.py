@@ -233,6 +233,10 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
             return []
         
         doc = doc.to_dict()    
+        meta_fields = doc.get("meta_fields", {})
+        category = meta_fields.get("category", "")
+        guide = meta_fields.get("guide", "")
+        article_type = meta_fields.get("article_type", "")
         
         updated_at = datetime.fromisoformat(updated_at_str) if len(pre_chunk_ids) > 0 and updated_at_str else None
 
@@ -249,6 +253,10 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
                     **bookstack_doc.metadata,
                     **parser_config
                 }
+                title = bookstack_doc.title
+                content = bookstack_doc.content
+                bookstack_doc.content = f"{category} / {guide} / {title}\n\n{content}"
+
                 docs.append(bookstack_doc)
                 book_id = bookstack_doc.metadata['book_id']
                 update_page_ids.append(f"{chapter_id}-{bookstack_doc.doc_id}")
