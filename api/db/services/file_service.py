@@ -490,7 +490,7 @@ class FileService(CommonService):
 
     @staticmethod
     def parse(filename, blob, img_base64=True, tenant_id=None):
-        from rag.app import audio, email, naive, picture, presentation
+        from rag.app import audio, email_parser, naive, picture, presentation
 
         def dummy(prog=None, msg=""):
             pass

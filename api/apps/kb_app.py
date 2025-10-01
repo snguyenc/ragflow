@@ -151,12 +151,13 @@ def update():
                         DocumentService.model.type == FileType.BOOKSTACK,
                         DocumentService.model.parser_id == "bookstack_chapter_doc"
                     ))
+                    parser_config = {**req["parser_config"], "booknames": booknames}
 
                     if existing_docs:
                         # Update existing document's parser_config
                         info = {"run": str(1), "progress": 0, "progress_msg": "", "chunk_num": 0, "token_num": 0}
                         virtual_doc = existing_docs[0]
-                        DocumentService.update_parser_config(virtual_doc.id, {"booknames": booknames})
+                        DocumentService.update_parser_config(virtual_doc.id, parser_config)
                         DocumentService.update_by_id(virtual_doc.id, info)
                         logging.info(f"Updated existing BookStack document {virtual_doc.id} with new booknames: {booknames}")
                     else:
@@ -166,7 +167,7 @@ def update():
                             "id": get_uuid(),
                             "kb_id": kb["id"],
                             "parser_id": "bookstack_chapter_doc",
-                            "parser_config": {"booknames": booknames},
+                            "parser_config": parser_config,
                             "created_by": current_user.id,
                             "type": FileType.BOOKSTACK,
                             "name": doc_name,

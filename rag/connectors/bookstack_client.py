@@ -253,7 +253,7 @@ class BookStackClient:
         response = self._make_request('/shelves', params)
         return response.get('data', [])
 
-    def get_pages(self, count: int = 50, offset: int = 0,
+    def get_pages(self, chapter_id: Optional[str] = None, count: int = 50, offset: int = 0,
                  updated_since: Optional[datetime] = None,
                  updated_until: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """
@@ -278,58 +278,12 @@ class BookStackClient:
             params['filter[updated_at:gte]'] = updated_since.strftime('%Y-%m-%d')
         if updated_until:
             params['filter[updated_at:lte]'] = updated_until.strftime('%Y-%m-%d')
+        if chapter_id:
+            params['filter[chapter_id]'] = chapter_id
 
         response = self._make_request('/pages', params)
         return response.get('data', [])
 
-    def get_pages_from_chapter(self, chapter_id: str, count: int = 50, offset: int = 0,
-                              updated_since: Optional[datetime] = None,
-                              updated_until: Optional[datetime] = None) -> List[Dict[str, Any]]:
-        """
-        Fetch pages from a specific chapter in BookStack
-
-        Args:
-            chapter_id: Chapter ID to fetch pages from
-            count: Number of pages to fetch
-            offset: Offset for pagination
-            updated_since: Only fetch pages updated after this date
-            updated_until: Only fetch pages updated before this date
-
-        Returns:
-            List of page data for the specified chapter
-        """
-        params = {
-            'count': str(count),
-            'offset': str(offset),
-            'sort': '+id'
-        }
-
-        if updated_since:
-            params['filter[updated_at:gte]'] = updated_since.strftime('%Y-%m-%d')
-        if updated_until:
-            params['filter[updated_at:lte]'] = updated_until.strftime('%Y-%m-%d')
-
-        # Fetch all pages and filter by chapter_id
-        response = self._make_request('/pages', params)
-        pages = response.get('data', [])
-
-        # Filter pages that belong to the specified chapter
-        chapter_pages = [page for page in pages if str(page.get('chapter_id', '')) == str(chapter_id)]
-
-        # Also fetch page content for each page to get full content
-        detailed_pages = []
-        for page in chapter_pages:
-            try:
-                page_content = self.get_page_content(str(page['id']))
-                # Merge page metadata with content
-                detailed_page = {**page, **page_content}
-                detailed_pages.append(detailed_page)
-            except Exception as e:
-                logging.warning(f"Failed to fetch content for page {page.get('id')}: {str(e)}")
-                # Keep the page even if content fetch fails
-                detailed_pages.append(page)
-
-        return detailed_pages
 
     def get_page_content(self, page_id: str) -> Dict[str, Any]:
         """

@@ -10,37 +10,6 @@ from datetime import datetime
 from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.file_service import FileService
 
-
-async def run_bookstack_connector(task, embedding_model, progress_callback):
-    """
-    Run BookStack connector to fetch documents and convert to chunks
-    """
-    try:
-        # Get config from task
-        doc_config = task.get("parser_config", {}).get("bookstack", {})
-        doc_id = task.get("doc_id")
-        kb_id = task["kb_id"]
-        tenant_id = task["tenant_id"]
-
-        # Get booknames filter
-        booknames_filter = doc_config.get("booknames", [])
-
-        # Use standalone function
-        return await fetch_bookstack_content(
-            bookstack_config=doc_config,
-            kb_id=kb_id,
-            tenant_id=tenant_id,
-            progress_callback=progress_callback,
-            doc_id=doc_id,
-            booknames_filter=booknames_filter
-        )
-
-    except Exception as e:
-        progress_callback(-1, f"BookStack connector failed: {str(e)}")
-        logging.exception("BookStack connector error")
-        raise
-
-
 async def run_bookstack_chapter_doc(task, progress_callback):
     """
     Run BookStack connector to fetch chapters and create documents
@@ -95,13 +64,14 @@ async def run_bookstack_chapter_doc(task, progress_callback):
             for bookstack_doc in batch:
                 doc_count += 1
                 progress_callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
-
+                
+                parser_config = {**task_parser_config, "source_chapter_id": bookstack_doc.doc_id}
                 # Create document for this chapter
                 chapter_doc_data = {
                     "id": get_uuid(),
                     "kb_id": kb_id,
                     "parser_id": "bookstack",
-                    "parser_config": {"source_chapter_id": bookstack_doc.doc_id, "booknames": booknames},
+                    "parser_config": parser_config,
                     "created_by": "task_executor",
                     "type": FileType.DOC,
                     "name": f"Chapter: {bookstack_doc.title}",
@@ -125,6 +95,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
 
                 if existing_docs:
                     chapter_document = existing_docs[0]
+                    DocumentService.update_parser_config(chapter_document.id, parser_config)
                     logging.info(f"Chapter document {bookstack_doc.title} already exists, using existing...")
                 else:
                     # Insert new chapter document
@@ -142,124 +113,63 @@ async def run_bookstack_chapter_doc(task, progress_callback):
         raise
 
 
-async def fetch_bookstack_content(bookstack_config, kb_id, tenant_id, progress_callback, doc_id=None, booknames_filter=None, return_raw=False):
+
+def fetch_bookstack_chapter_content(parser_config, kwargs, callback):
     """
-    Fetch content from BookStack - can be used standalone
+    Fetch BookStack chapter content and convert pages to sections format
 
     Args:
-        bookstack_config: BookStack configuration
-        kb_id: Knowledge base ID
-        tenant_id: Tenant ID
-        progress_callback: Progress callback function
-        doc_id: Optional document ID to associate chunks with
-        booknames_filter: Optional list of book names to filter by
+        parser_config: Parser configuration containing source_chapter_id
+        kwargs: Additional arguments containing tenant_id, etc.
+        callback: Progress callback function
 
     Returns:
-        List of processed chunks from BookStack
+        List of sections in format [(content, ""), ...]
     """
-
     try:
-        progress_callback(0.1, "Initializing BookStack connector...")
 
-        # Get BookStack configuration from settings and merge with provided config
-        from api import settings
+        # Get BookStack configuration
         global_config = settings.BOOKSTACK_CONFIG or {}
-        merged_config = {**global_config, **bookstack_config}
-
-        if not merged_config:
-            raise ValueError("BookStack configuration not found")
-
-        base_url = merged_config.get("base_url")
-        token_id = merged_config.get("token_id")
-        token_secret = merged_config.get("token_secret")
-
-        if not all([base_url, token_id, token_secret]):
-            raise ValueError("Missing required BookStack credentials")
+        if not global_config or not all([
+            global_config.get("base_url"),
+            global_config.get("token_id"),
+            global_config.get("token_secret")
+        ]):
+            raise ValueError("Missing BookStack configuration in settings")
 
         # Initialize connector
         connector = BookStackConnector(
-            base_url=base_url,
-            token_id=token_id,
-            token_secret=token_secret,
-            batch_size=merged_config.get("batch_size", 50),
-            include_books=merged_config.get("include_books", True),
-            include_chapters=merged_config.get("include_chapters", True),
-            include_pages=merged_config.get("include_pages", True),
-            include_shelves=merged_config.get("include_shelves", True)
+            base_url=global_config["base_url"],
+            token_id=global_config["token_id"],
+            token_secret=global_config["token_secret"],
+            batch_size=50,
+            include_chapter_to_pages=True
         )
 
-        # Test connection
-        progress_callback(0.2, "Testing BookStack connection...")
+        callback(0.2, "Testing BookStack connection...")
         success, error = connector.test_connection()
         if not success:
             raise Exception(f"BookStack connection failed: {error}")
 
-        progress_callback(0.3, "Fetching documents from BookStack...")
+        callback(0.3, "Fetching chapter pages from BookStack...")
 
-        # Parse date filters if provided
-        updated_since = None
-        updated_until = None
-        if merged_config.get("updated_since"):
-            try:
-                from datetime import datetime
-                updated_since = datetime.fromisoformat(merged_config["updated_since"])
-            except ValueError:
-                logging.warning(f"Invalid updated_since date format: {merged_config['updated_since']}")
+        # Get chapter ID from parser config
+        chapter_id = parser_config.get("source_chapter_id")
+        if not chapter_id:
+            raise ValueError("source_chapter_id not found in parser_config")
 
-        if merged_config.get("updated_until"):
-            try:
-                from datetime import datetime
-                updated_until = datetime.fromisoformat(merged_config["updated_until"])
-            except ValueError:
-                logging.warning(f"Invalid updated_until date format: {merged_config['updated_until']}")
-
-        all_chunks = []
-        total_documents = 0
-
-        def fetch_progress(prog, msg):
-            progress_callback(0.3 + 0.5 * prog, msg)
-
-        for document_batch in connector.fetch_documents(
-            updated_since=updated_since,
-            updated_until=updated_until,
-            progress_callback=fetch_progress
-        ):
-            # Convert documents to RAGFlow chunks
-            for document in document_batch:
-
-                chunk = document.to_ragflow_chunk(
-                    kb_id=kb_id,
-                    tenant_id=tenant_id
-                )
-
-                # Use provided doc_id or generate virtual doc_id
-                if doc_id:
-                    chunk["doc_id"] = doc_id
-                else:
-                    chunk["doc_id"] = f"bookstack_{document.doc_type}_{document.metadata.get('bookstack_id', 'unknown')}"
-
-                all_chunks.append(chunk)
-                total_documents += 1
-
-        progress_callback(0.8, f"Processed {total_documents} documents from BookStack")
-
-        # Process chunks similar to standard chunking
-        res_chunks = []
-        tk_count = 0
-        for chunk in all_chunks:
-            content = chunk["content_with_weight"]
-            if content.strip():
-                chunk["content_ltks"] = rag_tokenizer.tokenize(content)
-                chunk["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(chunk["content_ltks"])
-                res_chunks.append(chunk)
-                tk_count += num_tokens_from_string(content)
-
-        progress_callback(1.0, f"BookStack fetch completed. {len(res_chunks)} chunks, {tk_count} tokens")
-        return res_chunks
+        doc_count = 0
+        docs = []
+        for batch in connector.fetch_documents(chapter_id=chapter_id):
+            for bookstack_doc in batch:
+                doc_count += 1
+                callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
+                docs.append(bookstack_doc)
+        
+        return docs
 
     except Exception as e:
-        progress_callback(-1, f"BookStack fetch failed: {str(e)}")
-        logging.exception("BookStack fetch error")
+        callback(-1, f"BookStack chapter fetch error: {str(e)}")
+        logging.error(f"BookStack chapter fetch error: {str(e)}")
         raise
-
 

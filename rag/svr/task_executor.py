@@ -58,7 +58,7 @@ from api import settings
 from api.versions import get_ragflow_version
 from api.db.db_models import close_connection
 from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, bookstack, \
-    email, tag
+    email_parser, tag
 from rag.nlp import search, rag_tokenizer
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
 from rag.settings import DOC_MAXIMUM_SIZE, DOC_BULK_SIZE, EMBEDDING_BATCH_SIZE, SVR_CONSUMER_GROUP_NAME, get_svr_queue_name, get_svr_queue_names, print_rag_settings, TAG_FLD, PAGERANK_FLD
@@ -66,7 +66,7 @@ from rag.utils import num_tokens_from_string, truncate
 from rag.utils.redis_conn import REDIS_CONN, RedisDistributedLock
 from rag.utils.storage_factory import STORAGE_IMPL
 from graphrag.utils import chat_limiter
-from rag.svr.bookstack_svr import run_bookstack_chapter_doc, run_bookstack_connector
+from rag.svr.bookstack_svr import run_bookstack_chapter_doc
 
 BATCH_SIZE = 64
 
@@ -84,7 +84,7 @@ FACTORY = {
     ParserType.PICTURE.value: picture,
     ParserType.ONE.value: one,
     ParserType.AUDIO.value: audio,
-    ParserType.EMAIL.value: email,
+    ParserType.EMAIL.value: email_parser,
     ParserType.KG.value: naive,
     ParserType.TAG.value: tag,
     ParserType.BOOKSTACK.value: bookstack
@@ -250,23 +250,26 @@ async def build_chunks(task, progress_callback):
         return []
 
     chunker = FACTORY[task["parser_id"].lower()]
-    try:
-        st = timer()
-        bucket, name = File2DocumentService.get_storage_address(doc_id=task["doc_id"])
-        binary = await get_storage_binary(bucket, name)
-        logging.info("From minio({}) {}/{}".format(timer() - st, task["location"], task["name"]))
-    except TimeoutError:
-        progress_callback(-1, "Internal server error: Fetch file from minio timeout. Could you try it again.")
-        logging.exception(
-            "Minio {}/{} got timeout: Fetch file from minio timeout.".format(task["location"], task["name"]))
-        raise
-    except Exception as e:
-        if re.search("(No such file|not found)", str(e)):
-            progress_callback(-1, "Can not find file <%s> from minio. Could you try it again?" % task["name"])
-        else:
-            progress_callback(-1, "Get file from minio: %s" % str(e).replace("'", ""))
-        logging.exception("Chunking {}/{} got exception".format(task["location"], task["name"]))
-        raise
+    binary = None
+    
+    st = timer()
+    if task["parser_id"] != "bookstack":
+        try:
+            bucket, name = File2DocumentService.get_storage_address(doc_id=task["doc_id"])
+            binary = await get_storage_binary(bucket, name)
+            logging.info("From minio({}) {}/{}".format(timer() - st, task["location"], task["name"]))
+        except TimeoutError:
+            progress_callback(-1, "Internal server error: Fetch file from minio timeout. Could you try it again.")
+            logging.exception(
+                "Minio {}/{} got timeout: Fetch file from minio timeout.".format(task["location"], task["name"]))
+            raise
+        except Exception as e:
+            if re.search("(No such file|not found)", str(e)):
+                progress_callback(-1, "Can not find file <%s> from minio. Could you try it again?" % task["name"])
+            else:
+                progress_callback(-1, "Get file from minio: %s" % str(e).replace("'", ""))
+            logging.exception("Chunking {}/{} got exception".format(task["location"], task["name"]))
+            raise
 
     try:
         async with chunk_limiter:
@@ -606,14 +609,6 @@ async def do_handle_task(task):
             await run_graphrag(task, task_language, with_resolution, with_community, chat_model, embedding_model, progress_callback)
         progress_callback(prog=1.0, msg="Knowledge Graph done ({:.2f}s)".format(timer() - start_ts))
         return
-    elif task_type == "bookstack":
-        start_ts = timer()
-        chunks = await run_bookstack_connector(task, embedding_model, progress_callback)
-        if not chunks:
-            progress_callback(prog=1.0, msg="No chunks fetched from BookStack")
-            return
-        progress_callback(prog=1.0, msg="Fetched {} chunks from BookStack ({:.2f}s)".format(len(chunks), timer() - start_ts))
-        token_count = 100
     elif task_type == "bookstack_chapter_doc":
         start_ts = timer()
         chapter_count = await run_bookstack_chapter_doc(task, progress_callback)

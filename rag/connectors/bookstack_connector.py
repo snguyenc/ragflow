@@ -109,7 +109,8 @@ class BookStackConnector:
                  include_chapters: bool = False,
                  include_pages: bool = False,
                  include_shelves: bool = False,
-                 include_book_to_chapters: bool = False):
+                include_book_to_chapters: bool = False,
+                include_chapter_to_pages: bool = False):
         """
         Initialize BookStack connector
 
@@ -123,6 +124,7 @@ class BookStackConnector:
             include_pages: Whether to include pages
             include_shelves: Whether to include shelves
             include_book_to_chapters: Whether to include book to chapters
+            include_chapter_to_pages: Whether to include chapter to pages
         """
         self.client = BookStackClient(base_url, token_id, token_secret)
         self.batch_size = batch_size
@@ -131,6 +133,7 @@ class BookStackConnector:
         self.include_pages = include_pages
         self.include_shelves = include_shelves
         self.include_book_to_chapters = include_book_to_chapters
+        self.include_chapter_to_pages = include_chapter_to_pages
 
     def test_connection(self) -> Tuple[bool, Optional[str]]:
         """
@@ -283,59 +286,61 @@ class BookStackConnector:
             }
         )
 
+    def _get_date(self, date_str: str) -> Optional[datetime]:
+        try:
+            return datetime.fromisoformat(str(date_str).replace('Z', '+00:00'))
+        except ValueError:
+            return None
+    
     def _page_to_document(self, page_data: Dict[str, Any]) -> BookStackDocument:
         """Convert BookStack page to document"""
         page_id = str(page_data.get('id', ''))
-        title = str(page_data.get('name', 'Untitled Page'))
+        title = str(page_data.get('name', ''))
 
         # Fetch detailed page content
         try:
             detailed_page = self.client.get_page_content(page_id)
-            html_content = detailed_page.get('html', '')
-            raw_content = detailed_page.get('markdown', '') or detailed_page.get('text', '')
-        except BookStackClientError as e:
-            logging.warning(f"Failed to fetch detailed content for page {page_id}: {str(e)}")
-            html_content = ''
-            raw_content = ''
+            content_type = detailed_page.get('editor', 'markdown')
+            md_content = detailed_page.get('markdown', '')
+            if not md_content:
+                md_content = detailed_page.get('html', '')
 
-        # Clean HTML content
-        if html_content:
-            content = self._clean_html_content(html_content)
-        else:
-            content = raw_content
+            revision_count = detailed_page.get('revision_count', 1)
+            tags = detailed_page.get('tags', [])
 
-        # Combine title with content
-        full_content = f"{title}\n\n{content}" if content else title
-
-        url = self.client.build_app_url(
+            url = self.client.build_app_url(
             f"/books/{page_data.get('book_slug', '')}/page/{page_data.get('slug', page_id)}")
 
-        updated_at = None
-        updated_at_str = page_data.get('updated_at') or (detailed_page.get('updated_at') if 'detailed_page' in locals() else None)
-        if updated_at_str:
-            try:
-                updated_at = datetime.fromisoformat(str(updated_at_str).replace('Z', '+00:00'))
-            except ValueError:
-                pass
+            updated_at = self._get_date(page_data.get('updated_at'))    
+            created_at = self._get_date(page_data.get('created_at'))
 
-        return BookStackDocument(
-            doc_id=f"bookstack_page_{page_id}",
-            title=title,
-            content=full_content,
-            url=url,
-            doc_type="page",
-            updated_at=updated_at,
-            metadata={
-                "bookstack_id": page_id,
-                "book_id": str(page_data.get('book_id', '')),
-                "chapter_id": str(page_data.get('chapter_id', '')) if page_data.get('chapter_id') else None
-            }
-        )
+            return BookStackDocument(
+                doc_id=page_id,
+                title=title,
+                content=f"{title}\n\n{md_content}",
+                url=url,
+                doc_type=content_type,
+                updated_at=updated_at,
+                created_at=created_at,
+                metadata={
+                    "page_id": page_id,
+                    "url": url,
+                    "revision_count": revision_count,
+                    "tags": tags,
+                    "book_id": str(page_data.get('book_id', '')),
+                    "chapter_id": str(page_data.get('chapter_id', '')),
+                }
+            )
+        except BookStackClientError as e:
+            logging.warning(f"Failed to fetch detailed content for page {page_id}: {str(e)}")
+            return None
+
 
     def fetch_documents(self,
                        updated_since: Optional[datetime] = None,
                        updated_until: Optional[datetime] = None,
                        book_names: Optional[List[str]] = None,
+                       chapter_id: Optional[str] = None,
                        progress_callback=None) -> Iterator[List[BookStackDocument]]:
         """
         Fetch documents from BookStack
@@ -344,6 +349,7 @@ class BookStackConnector:
             updated_since: Only fetch documents updated after this date
             updated_until: Only fetch documents updated before this date
             book_names: List of book names to fetch documents from
+            chapter_id: List of chapter urls to fetch documents from
             progress_callback: Progress callback function
 
         Yields:
@@ -364,6 +370,11 @@ class BookStackConnector:
             content_types.append(("books", self._book_to_document, self.client.get_books))
         if self.include_chapters:
             content_types.append(("chapters", self._chapter_to_document, self.client.get_chapters))
+
+        if self.include_chapter_to_pages:
+            print("chapter_id", chapter_id)
+            get_chapter_to_pages_fetcher = partial(self.client.get_pages, chapter_id)
+            content_types.append(("chapter_to_pages", self._page_to_document, get_chapter_to_pages_fetcher))    
         if self.include_pages:
             content_types.append(("pages", self._page_to_document, self.client.get_pages))
             
@@ -383,7 +394,7 @@ class BookStackConnector:
 
                     if not items:
                         break
-
+                    print("items", items)
                     # Convert to documents
                     documents = []
                     for item in items:
@@ -457,17 +468,19 @@ if __name__ == "__main__":
         token_id="GyEiV5NkEZ8ytCgSH4hXvB7BVwZQ9knP",
         token_secret="puKhXEpOAarRvE3A7jvDdUE9pB204fXt",
         batch_size=50,
-        include_book_to_chapters=True,
+        include_chapter_to_pages=True,
     )
 
     print("global_config", "global_config")
     try:
         print("About to call fetch_documents()")
-        result = connector.fetch_documents(book_names=["Thẻ tín dụng"])
+        result = connector.fetch_documents(chapter_id="9")
         print("fetch_documents() returned:", type(result))
         # Since it returns an Iterator, we need to iterate
         for batch in result:
             print(f"Got batch with {len(batch)} documents")
+            for doc in batch:
+                print(doc.content)
             break  # Just test first batch
     except Exception as e:
         print(f"Error calling fetch_documents(): {e}")
