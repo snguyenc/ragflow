@@ -56,6 +56,11 @@ const ChunkCreatingModal: React.FC<IModalProps<any> & kFProps> = ({
     },
   });
   const [checked, setChecked] = useState(false);
+  const [sourceInfo, setSourceInfo] = useState({
+    category_kwd: '',
+    guide_kwd: '',
+    article_type_kwd: '',
+  });
   const { removeChunk } = useDeleteChunkByIds();
   const { data } = useFetchChunk(chunkId);
   const { t } = useTranslation();
@@ -91,7 +96,11 @@ const ChunkCreatingModal: React.FC<IModalProps<any> & kFProps> = ({
         ...data.data,
         tag_feas: transformTagFeaturesObjectToArray(tag_feas),
       });
-
+      setSourceInfo({
+        category_kwd: data.data.category_kwd,
+        guide_kwd: data.data.guide_kwd,
+        article_type_kwd: data.data.article_type_kwd,
+      });
       setChecked(available_int !== 0);
     }
   }, [data, form, chunkId]);
@@ -120,6 +129,21 @@ const ChunkCreatingModal: React.FC<IModalProps<any> & kFProps> = ({
               </FormItem>
             )}
           />
+          <FormItem>
+            <FormLabel>
+              {'Source: '}
+              <span className="text-text-secondary">
+                {' '}
+                Category: {sourceInfo.category_kwd}
+              </span>
+              <span className="text-text-secondary">
+                , Guide: {sourceInfo.guide_kwd}
+              </span>
+              <span className="text-text-secondary">
+                , Article Type: {sourceInfo.article_type_kwd}
+              </span>
+            </FormLabel>
+          </FormItem>
           <FormField
             control={form.control}
             name="important_kwd"

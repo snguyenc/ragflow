@@ -88,7 +88,14 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                 progress_callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
                 category = bookstack_doc.metadata.get("book_name", "")
                 parser_config = {**task_parser_config, "source_chapter_id": bookstack_doc.doc_id,
-                 "category": category, "guide": bookstack_doc.title}
+                 "category": category, "guide": bookstack_doc.title,
+                 "article_type": bookstack_doc.metadata.get("article_type", "Topic"),
+                 "created_by": bookstack_doc.metadata.get("created_by", ""),
+                 "updated_by": bookstack_doc.metadata.get("updated_by", "")
+                }
+
+                book_name = bookstack_doc.metadata.get("book_name", "")
+                chapter_name = f"[{book_name}]-{bookstack_doc.title}.bookstack"  
                 # Create document for this chapter
                 chapter_doc_data = {
                     "id": get_uuid(),
@@ -97,13 +104,18 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                     "parser_config": parser_config,
                     "created_by": "task_executor",
                     "type": FileType.DOC,
-                    "name": f"{bookstack_doc.title}.bookstack",
+                    "name": chapter_name,
                     "suffix": "bookstack",
                     "location": bookstack_doc.url,
-                    "metafields": {
-                        "created_at": bookstack_doc.created_at,
+                    "meta_fields": {
+                        "valid_from": bookstack_doc.created_at,
                         "updated_at": bookstack_doc.updated_at,
-                        **bookstack_doc.metadata,
+                        "category": category,
+                        "guide": bookstack_doc.title,
+                        "article_type": bookstack_doc.metadata.get("article_type", "Topic"),
+                        "author": bookstack_doc.metadata.get("created_by", ""),
+                        "updated_author": bookstack_doc.metadata.get("updated_by", ""),
+                        "description": bookstack_doc.metadata.get("description", ""),
                     },
                     "size": len(bookstack_doc.content.encode('utf-8')) if bookstack_doc.content else 0,
                 }
@@ -122,8 +134,12 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                     #keep updated_at for run job
                     from datetime import timezone
                     parser_config["updated_at"] = chapter_docs.get("update_date").astimezone(tz=timezone.utc).isoformat()
-                    DocumentService.update_parser_config(chapter_document.id, parser_config)
-                    logging.info(f"Chapter document {bookstack_doc.title} already exists, using existing...")
+                    #DocumentService.update_parser_config(chapter_document.id, parser_config)
+
+                    info = {"name": chapter_name, "parser_config": parser_config, "meta_fields": chapter_doc_data.get("meta_fields")}
+                    #DocumentService.update_parser_config(virtual_doc.id, parser_config)
+                    DocumentService.update_by_id(chapter_document.id, info)
+                    logging.info(f"Chapter document {chapter_name} already exists, using existing...")
 
                     page_count = 0
                     for batch in connector_page.fetch_documents(chapter_id=bookstack_doc.doc_id, updated_since=chapter_docs.get("update_date")):
@@ -135,7 +151,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                         bucket, name = File2DocumentService.get_storage_address(doc_id=chapter_docs['id'])
                         incremental_queue_tasks(chapter_docs, bucket, name, 1)
                     else: 
-                        logging.info(f"No new pages found for chapter: {bookstack_doc.title}")    
+                        logging.info(f"No new pages found for chapter: {chapter_name}")    
                 else:
                     # Insert new chapter document
                     chapter_document = DocumentService.insert(chapter_doc_data)
@@ -143,7 +159,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                     # Add to file system
                     kb_folder = FileService.get_kb_folder(tenant_id)
                     FileService.add_file_from_kb(chapter_docs, kb_folder["id"], tenant_id)
-                    logging.info(f"Created chapter document: {chapter_document.id} for chapter: {bookstack_doc.title}")
+                    logging.info(f"Created chapter document: {chapter_document.id} for chapter: {chapter_name}")
 
                     #submit task for auto chunking
                     logging.info(f"Submit task for auto chunking: {chapter_docs['id']}")

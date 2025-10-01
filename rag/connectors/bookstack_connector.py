@@ -227,6 +227,23 @@ class BookStackConnector:
         updated_at = self._get_date(chapter_data.get('updated_at'))
         created_at = self._get_date(chapter_data.get('created_at'))
 
+        article_type = "Topic"
+        created_by_name = ""
+        updated_by_name = ""
+        try:
+            detailed_chapter = self.client.get_chapter_content(chapter_id)
+            tags = detailed_chapter.get('tags', [])
+            created_by = detailed_chapter.get('created_by', {})
+            updated_by = detailed_chapter.get('updated_by', {})
+            tags_map = {tag["name"]: tag["value"] for tag in tags}
+            article_type = tags_map.get("ArticleType", "Topic")
+            created_by_name = created_by.get("name", "")
+            updated_by_name = updated_by.get("name", "")
+
+        except Exception as e:
+            logging.warning(f"Error getting chapter content: {str(e)}")
+            pass
+
         return BookStackDocument(
             doc_id=chapter_id,
             title=title,
@@ -239,7 +256,10 @@ class BookStackConnector:
                 "chapter_id": chapter_id,
                 "book_id": str(chapter_data.get('book_id', '')),
                 "book_name": str(chapter_data.get('book_name', '')),
-                "description": description
+                "description": description,
+                "article_type": article_type,
+                "created_by": created_by_name,
+                "updated_by": updated_by_name
             }
         )
 

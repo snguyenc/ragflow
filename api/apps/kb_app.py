@@ -156,17 +156,21 @@ def update():
 
                     if existing_docs:
                         # Update existing document's parser_config
+                        logging.info(f"Update BookStack document {booknames}")
                         virtual_doc = existing_docs[0]
+                        virtual_doc = virtual_doc.to_dict()
+                        doc_name = f"Sync {len(booknames)} Books & Chapters.bookstack"
+                        doc_id = virtual_doc["id"]
                         #use before update_date of virtual document
                         parser_config["updated_at"] = virtual_doc.get("update_date").astimezone(tz=timezone.utc).isoformat()
-                        info = {"run": str(1), "progress": 0, "progress_msg": "", "chunk_num": 0, "token_num": 0, "parser_config": parser_config}
+                        info = {"name": doc_name, "run": str(1), "progress": 0, "progress_msg": "", "chunk_num": 0, "token_num": 0, "parser_config": parser_config}
                         #DocumentService.update_parser_config(virtual_doc.id, parser_config)
-                        DocumentService.update_by_id(virtual_doc.id, info)
-                        logging.info(f"Updated existing BookStack document {virtual_doc.id} with new booknames: {booknames}")
+                        DocumentService.update_by_id(doc_id, info)
+                        logging.info(f"Updated existing BookStack document {doc_id} with new booknames: {booknames}")
                     else:
                         # Create new virtual document for BookStack content
                         parser_config["updated_at"] = datetime.now().astimezone(tz=timezone.utc).isoformat()
-                        doc_name = f"Sync {len(booknames)} Book Chapters.bookstack"
+                        doc_name = f"Sync {len(booknames)} Books & Chapters.bookstack"
                         virtual_doc = DocumentService.insert({
                             "id": get_uuid(),
                             "kb_id": kb["id"],

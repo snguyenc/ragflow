@@ -287,7 +287,7 @@ def convert_conditions(metadata_condition):
 
 
 def meta_filter(metas: dict, filters: list[dict]):
-    doc_ids = set([])
+    doc_ids = []
 
     def filter_out(v2docs, operator, value):
         ids = []
@@ -326,13 +326,12 @@ def meta_filter(metas: dict, filters: list[dict]):
             if k != f["key"]:
                 continue
             ids = filter_out(v2docs, f["op"], f["value"])
-            if not doc_ids:
-                doc_ids = set(ids)
-            else:
-                doc_ids = doc_ids & set(ids)
-            if not doc_ids:
-                return []
-    return list(doc_ids)
+            doc_ids.extend(ids)
+            
+            print("final add", doc_ids)
+            #if not doc_ids:
+            #   return []
+    return list(set(doc_ids))
 
 
 def chat(dialog, messages, stream=True, **kwargs):
@@ -404,11 +403,13 @@ def chat(dialog, messages, stream=True, **kwargs):
 
     if dialog.meta_data_filter:
         metas = DocumentService.get_meta_by_kbs(dialog.kb_ids)
-        if dialog.meta_data_filter.get("method") == "auto":
+        #logging.info("Meta data filter: {}-{}".format(metas, dialog.meta_data_filter.get("method")))
+        if dialog.meta_data_filter.get("method") == "automatic":
             filters = gen_meta_filter(chat_mdl, metas, questions[-1])
+            logging.info("Meta data filter 2s: {}".format(filters))
             attachments.extend(meta_filter(metas, filters))
             if not attachments:
-                attachments = None
+                attachments = []
         elif dialog.meta_data_filter.get("method") == "manual":
             attachments.extend(meta_filter(metas, dialog.meta_data_filter["manual"]))
             if not attachments:
@@ -418,7 +419,7 @@ def chat(dialog, messages, stream=True, **kwargs):
         questions[-1] += keyword_extraction(chat_mdl, questions[-1])
 
     refine_question_ts = timer()
-
+    logging.info("Attachments: {}".format(attachments))
     thought = ""
     kbinfos = {"total": 0, "chunks": [], "doc_aggs": []}
     knowledges = []
