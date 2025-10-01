@@ -2,6 +2,24 @@
 
 set -e
 
+# Function to load environment variables from .env file
+load_env_file() {
+    # Get the directory of the current script
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local env_file="$script_dir/.env"
+
+    # Check if .env file exists
+    if [ -f "$env_file" ]; then
+        echo "Loading environment variables from: $env_file"
+        # Source the .env file
+        set -a
+        source "$env_file" 
+        set +a
+    else
+        echo "Warning: .env file not found at: $env_file"
+    fi
+}
+
 # -----------------------------------------------------------------------------
 # Usage and command-line argument parsing
 # -----------------------------------------------------------------------------
@@ -29,7 +47,7 @@ ENABLE_TASKEXECUTOR=1  # Default to enable task executor
 ENABLE_MCP_SERVER=0
 CONSUMER_NO_BEG=0
 CONSUMER_NO_END=0
-WORKERS=2
+WORKERS=1
 
 MCP_HOST="127.0.0.1"
 MCP_PORT=9382
@@ -144,6 +162,7 @@ export PYTHONPATH=$(pwd)
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/"
 PY=python3
 
+load_env_file
 # -----------------------------------------------------------------------------
 # Function(s)
 # -----------------------------------------------------------------------------
@@ -178,7 +197,7 @@ function start_mcp_server() {
 
 if [[ "${ENABLE_WEBSERVER}" -eq 1 ]]; then
     echo "Starting nginx..."
-    /usr/sbin/nginx
+    #/usr/sbin/nginx
 
     echo "Starting ragflow_server..."
     while true; do
