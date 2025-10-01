@@ -372,11 +372,14 @@ def queue_tasks(doc: dict, bucket: str, name: str, priority: int):
             parse_task_array.append(task)
     elif doc["parser_id"] == "bookstack":
         task = new_task()
-        task["task_type"] = "bookstack"
+        task["task_type"] = doc["parser_id"]
+        task["to_page"] = 1
         parse_task_array.append(task)
     elif doc["parser_id"] == "bookstack_chapter_doc":
         task = new_task()
-        task["task_type"] = "bookstack_chapter_doc"
+        booknames = doc["parser_config"].get("booknames", [])
+        task["task_type"] = doc["parser_id"]
+        task["to_page"] = len(booknames)
         parse_task_array.append(task)
     else:
         parse_task_array.append(new_task())
@@ -408,6 +411,7 @@ def queue_tasks(doc: dict, bucket: str, name: str, priority: int):
             if pre_task["chunk_ids"]:
                 pre_chunk_ids.extend(pre_task["chunk_ids"].split())
         if pre_chunk_ids:
+            print(">>> delete Pre chunk ids:", pre_chunk_ids)
             settings.docStoreConn.delete({"id": pre_chunk_ids}, search.index_name(chunking_config["tenant_id"]),
                                          chunking_config["kb_id"])
     DocumentService.update_by_id(doc["id"], {"chunk_num": ck_num})

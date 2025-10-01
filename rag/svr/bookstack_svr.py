@@ -9,6 +9,8 @@ import logging
 from datetime import datetime
 from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.file_service import FileService
+from api.db.services.task_service import queue_tasks
+from api.db.services.file2document_service import File2DocumentService
 
 async def run_bookstack_chapter_doc(task, progress_callback):
     """
@@ -31,8 +33,14 @@ async def run_bookstack_chapter_doc(task, progress_callback):
             progress_callback(-1, "No booknames provided in document parser_config")
             return []
 
-        progress_callback(0.2, f"Initializing BookStack connector for books: {', '.join(booknames)}")
+        has, doc = DocumentService.get_by_id(doc_id)
+        if not has:
+            progress_callback(-1, f"Document {doc_id} not found")
+            return []
 
+        progress_callback(0.2, f"Initializing BookStack connector for books: {', '.join(booknames)}")
+        doc = doc.to_dict()
+        #print("doc: ", doc)
         # Get BookStack config from settings
         global_config = settings.BOOKSTACK_CONFIG or {}
         if not global_config or not all([
@@ -50,6 +58,14 @@ async def run_bookstack_chapter_doc(task, progress_callback):
             include_book_to_chapters=True  # Primary method for book filtering
         )
 
+        connector_page = BookStackConnector(
+            base_url=global_config["base_url"],
+            token_id=global_config["token_id"],
+            token_secret=global_config["token_secret"],
+            batch_size=50,
+            include_pages=True  # Primary method for book filtering
+        )
+
         progress_callback(0.3, "Testing BookStack connection...")
         success, error = connector.test_connection()
         if not success:
@@ -58,14 +74,20 @@ async def run_bookstack_chapter_doc(task, progress_callback):
         progress_callback(0.4, "Fetching chapters from BookStack...")
 
         # Fetch chapters and pages for specified books
+        # not usfull any more, chunk num alway reset
         doc_count = 0
+        doc_chunk_num = doc.get("chunk_num")
+        doc_updated_at = doc.get("update_date") if doc_chunk_num > 0 else None
 
-        for batch in connector.fetch_documents(book_names=booknames):
+        logging.info(f"Fetching chapters from BookStack for books: {doc_updated_at}, {doc_chunk_num}")
+        
+        for batch in connector.fetch_documents(book_names=booknames, updated_since=doc_updated_at):
             for bookstack_doc in batch:
                 doc_count += 1
                 progress_callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
                 category = bookstack_doc.metadata.get("book_name", "")
-                parser_config = {**task_parser_config, "source_chapter_id": bookstack_doc.doc_id, "category": category, "guide": bookstack_doc.title}
+                parser_config = {**task_parser_config, "source_chapter_id": bookstack_doc.doc_id,
+                 "category": category, "guide": bookstack_doc.title, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 # Create document for this chapter
                 chapter_doc_data = {
                     "id": get_uuid(),
@@ -95,15 +117,34 @@ async def run_bookstack_chapter_doc(task, progress_callback):
 
                 if existing_docs:
                     chapter_document = existing_docs[0]
+                    chapter_docs = chapter_document.to_dict()
                     DocumentService.update_parser_config(chapter_document.id, parser_config)
                     logging.info(f"Chapter document {bookstack_doc.title} already exists, using existing...")
+
+                    page_count = 0
+                    for batch in connector_page.fetch_documents(chapter_id=bookstack_doc.doc_id, updated_since=chapter_docs.get("update_date")):
+                        for bookstack_doc in batch:
+                            page_count += 1
+                            
+                    if page_count > 0:
+                        logging.info(f"Submit task for auto chunking: {chapter_docs['id']}")
+                        bucket, name = File2DocumentService.get_storage_address(doc_id=chapter_docs['id'])
+                        queue_tasks(chapter_docs, bucket, name, 1)
+                    else: 
+                        logging.info(f"No new pages found for chapter: {bookstack_doc.title}")    
                 else:
                     # Insert new chapter document
                     chapter_document = DocumentService.insert(chapter_doc_data)
+                    chapter_docs = chapter_document.to_dict()
                     # Add to file system
                     kb_folder = FileService.get_kb_folder(tenant_id)
-                    FileService.add_file_from_kb(chapter_document.to_dict(), kb_folder["id"], tenant_id)
+                    FileService.add_file_from_kb(chapter_docs, kb_folder["id"], tenant_id)
                     logging.info(f"Created chapter document: {chapter_document.id} for chapter: {bookstack_doc.title}")
+
+                    #submit task for auto chunking
+                    logging.info(f"Submit task for auto chunking: {chapter_docs['id']}")
+                    bucket, name = File2DocumentService.get_storage_address(doc_id=chapter_docs['id'])
+                    queue_tasks(chapter_docs, bucket, name, 1)
 
         return doc_count
 

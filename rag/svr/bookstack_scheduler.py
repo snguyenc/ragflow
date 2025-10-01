@@ -80,97 +80,35 @@ class BookStackScheduler:
         try:
             logging.info("Checking BookStack for updates...")
 
-            # Get all knowledge bases có BookStack documents
-            kbs_with_bookstack = self._get_bookstack_knowledge_bases()
+            # Get all BookStack documents directly
+            bookstack_docs = self._get_bookstack_documents()
 
-            #for kb in kbs_with_bookstack:
-            #    self._check_kb_bookstack_updates(kb)
+            for doc in bookstack_docs:
+                if self._check_document_updates(doc):
+                    self._schedule_document_update(doc)
 
         except Exception as e:
             logging.exception(f"Error checking BookStack updates: {str(e)}")
 
 
-    def _get_bookstack_knowledge_bases(self) -> List[Dict[str, Any]]:
-        """Get knowledge bases có BookStack documents"""
+    def _get_bookstack_documents(self) -> List[Dict[str, Any]]:
+        """Get all BookStack documents"""
         try:
-            # Query for KBs có BookStack documents
-            # Find KBs that have documents with parser_id = "bookstack"
             from api.db.services.document_service import DocumentService
 
-            kb_ids_with_bookstack = (DocumentService.model
-                .select(DocumentService.model.kb_id)
-                .where(DocumentService.model.parser_id == "bookstack")
-                .distinct())
-
-            if not kb_ids_with_bookstack.exists():
-                logging.info("No knowledge bases found with BookStack documents")
-                return []
-
-            kb_ids = [kb.kb_id for kb in kb_ids_with_bookstack]
-
-            kbs = list(KnowledgebaseService.model.select().where(
-                KnowledgebaseService.model.id.in_(kb_ids)
-            ).dicts())
-
-            logging.info(f"Found {len(kbs)} knowledge bases with BookStack integration")
-            return kbs
-
-        except Exception as e:
-            logging.exception(f"Error getting BookStack knowledge bases: {str(e)}")
-            return []
-
-    def _check_kb_bookstack_updates(self, kb: Dict[str, Any]):
-        """Check updates cho 1 knowledge base"""
-        try:
-            kb_id = kb["id"]
-            tenant_id = kb["tenant_id"]
-
-            logging.info(f"Checking updates for KB {kb_id}")
-
-            # Get BookStack documents in this KB
+            # Query trực tiếp documents có parser_id = "bookstack"
             bookstack_docs = list(DocumentService.model.select().where(
-                DocumentService.model.kb_id == kb_id,
                 DocumentService.model.parser_id == "bookstack"
             ).dicts())
 
-            if not bookstack_docs:
-                return
-
-            # Get BookStack config
-            global_config = settings.BOOKSTACK_CONFIG or {}
-            if not global_config:
-                logging.warning(f"No BookStack config found for KB {kb_id}")
-                return
-
-            # Initialize connector
-            connector = BookStackConnector(
-                base_url=global_config["base_url"],
-                token_id=global_config["token_id"],
-                token_secret=global_config["token_secret"]
-            )
-
-            # Check connection
-            success, error = connector.test_connection()
-            if not success:
-                logging.error(f"BookStack connection failed for KB {kb_id}: {error}")
-                return
-
-            # Check each document for updates
-            updated_docs = []
-            for doc in bookstack_docs:
-                if self._check_document_updates(connector, doc):
-                    updated_docs.append(doc)
-
-            if updated_docs:
-                logging.info(f"Found {len(updated_docs)} updated documents in KB {kb_id}")
-                self._schedule_document_updates(updated_docs)
-            else:
-                logging.info(f"No updates found for KB {kb_id}")
+            logging.info(f"Found {len(bookstack_docs)} BookStack documents")
+            return bookstack_docs
 
         except Exception as e:
-            logging.exception(f"Error checking KB {kb_id} updates: {str(e)}")
+            logging.exception(f"Error getting BookStack documents: {str(e)}")
+            return []
 
-    def _check_document_updates(self, connector: BookStackConnector, doc: Dict[str, Any]) -> bool:
+    def _check_document_updates(self, doc: Dict[str, Any]) -> bool:
         """Check if document has updates"""
         try:
             parser_config = doc.get("parser_config", {})
@@ -178,6 +116,19 @@ class BookStackScheduler:
 
             if not source_chapter_id:
                 return False
+
+            # Get BookStack config
+            global_config = settings.BOOKSTACK_CONFIG or {}
+            if not global_config:
+                logging.warning("No BookStack config found")
+                return False
+
+            # Initialize connector
+            connector = BookStackConnector(
+                base_url=global_config["base_url"],
+                token_id=global_config["token_id"],
+                token_secret=global_config["token_secret"]
+            )
 
             # Get chapter info from BookStack
             try:
@@ -206,6 +157,40 @@ class BookStackScheduler:
         except Exception as e:
             logging.exception(f"Error checking document updates: {str(e)}")
             return False
+
+    def _schedule_document_update(self, doc: Dict[str, Any]):
+        """Schedule update task cho single document"""
+        try:
+            task_data = {
+                "id": get_uuid(),
+                "doc_id": doc["id"],
+                "kb_id": doc["kb_id"],
+                "tenant_id": doc["tenant_id"],
+                "name": doc["name"],
+                "parser_id": doc["parser_id"],
+                "parser_config": doc["parser_config"],
+                "from_page": 0,
+                "to_page": -1,
+                "create_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "progress": 0.0,
+                "progress_msg": "Scheduled for BookStack sync",
+                "created_by": "bookstack_scheduler"
+            }
+
+            # Insert task
+            TaskService.insert(task_data)
+
+            # Queue task for page-level sync
+            REDIS_CONN.queue_product("task_executor", {
+                "id": task_data["id"],
+                "task_type": "bookstack"  # For page updates
+            })
+
+            logging.info(f"Scheduled update task for document {doc['id']}: {doc['name']}")
+
+        except Exception as e:
+            logging.exception(f"Error scheduling document update: {str(e)}")
 
     def _schedule_document_updates(self, docs: List[Dict[str, Any]]):
         """Schedule update tasks cho documents"""

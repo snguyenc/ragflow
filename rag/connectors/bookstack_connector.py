@@ -368,7 +368,8 @@ class BookStackConnector:
             get_chapter_to_pages_fetcher = partial(self.client.get_pages, chapter_id)
             content_types.append(("chapter_to_pages", self._page_to_document, get_chapter_to_pages_fetcher))    
         if self.include_pages:
-            content_types.append(("pages", self._page_to_document, self.client.get_pages))
+            get_pages_fetcher = partial(self.client.get_pages, chapter_id)
+            content_types.append(("pages", self._page_to_document, get_pages_fetcher))
             
         for content_type, converter, fetcher in content_types:
             if progress_callback:

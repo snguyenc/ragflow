@@ -256,6 +256,10 @@ class BookStackClient:
         response = self._make_request('/shelves', params)
         return response.get('data', [])
 
+    def _to_local_tz(self, dt: datetime) -> str:
+        from datetime import timezone
+        return dt.astimezone(tz=timezone.utc).isoformat()
+
     def get_pages(self, chapter_id: Optional[str] = None, count: int = 50, offset: int = 0,
                  updated_since: Optional[datetime] = None,
                  updated_until: Optional[datetime] = None) -> List[Dict[str, Any]]:
@@ -278,12 +282,13 @@ class BookStackClient:
         }
 
         if updated_since:
-            params['filter[updated_at:gte]'] = updated_since.strftime('%Y-%m-%d')
+            params['filter[updated_at:gt]'] = self._to_local_tz(updated_since)
         if updated_until:
-            params['filter[updated_at:lte]'] = updated_until.strftime('%Y-%m-%d')
+            params['filter[updated_at:lt]'] = self._to_local_tz(updated_until)
         if chapter_id:
             params['filter[chapter_id]'] = chapter_id
 
+        print("pages params", params)
         response = self._make_request('/pages', params)
         return response.get('data', [])
 
