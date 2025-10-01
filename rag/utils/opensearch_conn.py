@@ -206,7 +206,7 @@ class OSConnection(DocStoreConnection):
                 knn_query[vector_column_name]["vector"] = list(m.embedding_data)
                 knn_query[vector_column_name]["k"] = m.topn
                 knn_query[vector_column_name]["filter"] = bqry.to_dict()
-                knn_query[vector_column_name]["boost"] = similarity
+                #knn_query[vector_column_name]["boost"] = similarity
 
         if bqry and rank_feature:
             for fld, sc in rank_feature.items():

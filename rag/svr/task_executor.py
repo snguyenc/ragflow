@@ -549,6 +549,7 @@ async def do_handle_task(task):
     task_tenant_id = task["tenant_id"]
     task_embedding_id = task["embd_id"]
     task_language = task["language"]
+    #task_language = "Vietnamese"
     task_llm_id = task["llm_id"]
     task_dataset_id = task["kb_id"]
     task_doc_id = task["doc_id"]

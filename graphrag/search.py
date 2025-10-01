@@ -72,6 +72,7 @@ class KGSearch(Dealer):
             for f in flds:
                 if f in ent and ent[f] is None:
                     del ent[f]
+            #logging.info(f"_ent_info_from_: {ent['entity_kwd']} {ent['_score']} < {sim_thr}")
             if get_float(ent.get("_score", 0)) < sim_thr:
                 continue
             if isinstance(ent["entity_kwd"], list):
@@ -90,6 +91,7 @@ class KGSearch(Dealer):
                                                    "weight_int"])
         for _, ent in es_res.items():
             if get_float(ent["_score"]) < sim_thr:
+                #logging.info(f"_relation_info_from_: {ent['from_entity_kwd']} {ent['to_entity_kwd']} {ent['_score']} < {sim_thr}")
                 continue
             f, t = sorted([ent["from_entity_kwd"], ent["to_entity_kwd"]])
             if isinstance(f, list):
@@ -112,6 +114,7 @@ class KGSearch(Dealer):
         es_res = self.dataStore.search(["content_with_weight", "entity_kwd", "rank_flt"], [], filters, [matchDense],
                                        OrderByExpr(), 0, N,
                                        idxnms, kb_ids)
+        #logging.info(f"get_relevant_ents_by_keywords:{keywords} {sim_thr} {len(es_res)}")
         return self._ent_info_from_(es_res, sim_thr)
 
     def get_relevant_relations_by_txt(self, txt, filters, idxnms, kb_ids, emb_mdl, sim_thr=0.3, N=56):
@@ -123,6 +126,8 @@ class KGSearch(Dealer):
         es_res = self.dataStore.search(
             ["content_with_weight", "_score", "from_entity_kwd", "to_entity_kwd", "weight_int"],
             [], filters, [matchDense], OrderByExpr(), 0, N, idxnms, kb_ids)
+
+        #logging.info(f"get_relevant_relations_by_txt:{txt} {sim_thr} {len(es_res)}")
         return self._relation_info_from_(es_res, sim_thr)
 
     def get_relevant_ents_by_types(self, types, filters, idxnms, kb_ids, N=56):
@@ -163,12 +168,15 @@ class KGSearch(Dealer):
             logging.exception(e)
             ents = [qst]
             pass
+        
+        logging.info(f"search index: {idxnms}, kb_ids: {kb_ids} filters: {filters}")
 
         ents_from_query = self.get_relevant_ents_by_keywords(ents, filters, idxnms, kb_ids, emb_mdl, ent_sim_threshold)
         ents_from_types = self.get_relevant_ents_by_types(ty_kwds, filters, idxnms, kb_ids, 10000)
         rels_from_txt = self.get_relevant_relations_by_txt(qst, filters, idxnms, kb_ids, emb_mdl, rel_sim_threshold)
         nhop_pathes = defaultdict(dict)
         for _, ent in ents_from_query.items():
+            #logging.info(f"Ent: {ent}")
             nhops = ent.get("n_hop_ents", [])
             if not isinstance(nhops, list):
                 logging.warning(f"Abnormal n_hop_ents: {nhops}")
