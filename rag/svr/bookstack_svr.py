@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.file_service import FileService
-from api.db.services.task_service import queue_tasks
+from api.db.services.task_service import queue_tasks, incremental_queue_tasks
 from api.db.services.file2document_service import File2DocumentService
 
 async def run_bookstack_chapter_doc(task, progress_callback):
@@ -87,7 +87,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                 progress_callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
                 category = bookstack_doc.metadata.get("book_name", "")
                 parser_config = {**task_parser_config, "source_chapter_id": bookstack_doc.doc_id,
-                 "category": category, "guide": bookstack_doc.title, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                 "category": category, "guide": bookstack_doc.title}
                 # Create document for this chapter
                 chapter_doc_data = {
                     "id": get_uuid(),
@@ -129,7 +129,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                     if page_count > 0:
                         logging.info(f"Submit task for auto chunking: {chapter_docs['id']}")
                         bucket, name = File2DocumentService.get_storage_address(doc_id=chapter_docs['id'])
-                        queue_tasks(chapter_docs, bucket, name, 1)
+                        incremental_queue_tasks(chapter_docs, bucket, name, 1)
                     else: 
                         logging.info(f"No new pages found for chapter: {bookstack_doc.title}")    
                 else:

@@ -425,6 +425,49 @@ def queue_tasks(doc: dict, bucket: str, name: str, priority: int):
             get_svr_queue_name(priority), message=unfinished_task
         ), "Can't access Redis. Please check the Redis' status."
 
+def incremental_queue_tasks(doc: dict, bucket: str, name: str, priority: int):
+    """Create and queue document processing tasks.
+
+    This function creates processing tasks for a document based on its type and configuration.
+    It handles different document types (PDF, Excel, etc.) differently and manages task
+    chunking and configuration. It also implements task reuse optimization by checking
+    for previously completed tasks.
+
+    Args:
+        doc (dict): Document dictionary containing metadata and configuration.
+        bucket (str): Storage bucket name where the document is stored.
+        name (str): File name of the document.
+        priority (int, optional): Priority level for task queueing (default is 0).
+
+    Note:
+        - For PDF documents, tasks are created per page range based on configuration
+        - For Excel documents, tasks are created per row range
+        - Task digests are calculated for optimization and reuse
+        - Previous task chunks may be reused if available
+    """
+    def new_task():
+        return {"id": get_uuid(), "doc_id": doc["id"], "progress": 0.0, "from_page": 0, "to_page": 100000000}
+
+    parse_task_array = []
+
+    
+    if doc["parser_id"] == "bookstack":
+        task = new_task()
+        task["task_type"] = doc["parser_id"]
+        task["to_page"] = 1
+        parse_task_array.append(task)
+    else:
+        parse_task_array.append(new_task())
+
+    bulk_insert_into_db(Task, parse_task_array, True)
+    DocumentService.begin2parse(doc["id"])
+
+    unfinished_task_array = [task for task in parse_task_array if task["progress"] < 1.0]
+    for unfinished_task in unfinished_task_array:
+        assert REDIS_CONN.queue_product(
+            get_svr_queue_name(priority), message=unfinished_task
+        ), "Can't access Redis. Please check the Redis' status."
+
 
 def reuse_prev_task_chunks(task: dict, prev_tasks: list[dict], chunking_config: dict):
     """Attempt to reuse chunks from previous tasks for optimization.

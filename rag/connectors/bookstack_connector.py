@@ -327,6 +327,38 @@ class BookStackConnector:
             logging.warning(f"Failed to fetch detailed content for page {page_id}: {str(e)}")
             return None
 
+    def _page_to_document_only(self, page_data: Dict[str, Any]) -> BookStackDocument:
+        """Convert BookStack page to document"""
+        page_id = str(page_data.get('id', ''))
+        title = str(page_data.get('name', ''))
+
+        # Fetch detailed page content
+        try:
+            md_content = ""
+            url = self.client.build_app_url(
+            f"/books/{page_data.get('book_slug', '')}/page/{page_data.get('slug', page_id)}")
+
+            updated_at = self._get_date(page_data.get('updated_at'))    
+            created_at = self._get_date(page_data.get('created_at'))
+
+            return BookStackDocument(
+                doc_id=page_id,
+                title=title,
+                content=f"{title}\n\n{md_content}",
+                url=url,
+                doc_type="pages",
+                updated_at=updated_at,
+                created_at=created_at,
+                metadata={
+                    "page_id": page_id,
+                    "url": url,
+                    "book_id": str(page_data.get('book_id', '')),
+                    "chapter_id": str(page_data.get('chapter_id', '')),
+                }
+            )
+        except BookStackClientError as e:
+            logging.warning(f"Failed to fetch detailed content for page {page_id}: {str(e)}")
+            return None
 
     def fetch_documents(self,
                        updated_since: Optional[datetime] = None,
@@ -363,13 +395,16 @@ class BookStackConnector:
         if self.include_chapters:
             content_types.append(("chapters", self._chapter_to_document, self.client.get_chapters))
 
+        # use for get pages base on chapters
         if self.include_chapter_to_pages:
             print("chapter_id", chapter_id)
             get_chapter_to_pages_fetcher = partial(self.client.get_pages, chapter_id)
             content_types.append(("chapter_to_pages", self._page_to_document, get_chapter_to_pages_fetcher))    
+        
+        # use for check pages changes base on chapters
         if self.include_pages:
             get_pages_fetcher = partial(self.client.get_pages, chapter_id)
-            content_types.append(("pages", self._page_to_document, get_pages_fetcher))
+            content_types.append(("pages", self._page_to_document_only, get_pages_fetcher))
             
         for content_type, converter, fetcher in content_types:
             if progress_callback:
