@@ -35,6 +35,14 @@ from api.constants import DATASET_NAME_LIMIT
 from rag.settings import PAGERANK_FLD
 from rag.utils.storage_factory import STORAGE_IMPL
 import logging
+from api.db.services.task_service import TaskService, cancel_all_task_of, queue_tasks
+from api.db.db_models import Task
+from api.db.db_utils import bulk_insert_into_db
+from rag.settings import get_svr_queue_name
+from rag.utils.redis_conn import REDIS_CONN
+from api.db import FileType
+import xxhash
+from datetime import datetime
 
 @manager.route('/create', methods=['post'])  # noqa: F821
 @login_required
@@ -137,36 +145,49 @@ def update():
             booknames = req["parser_config"]["booknames"]
             if booknames:  # Only if booknames is not empty
                 try:
-                    from api.utils import get_uuid
-                    from api.db.db_models import Task
-                    from api.db.db_utils import bulk_insert_into_db
-                    from rag.settings import get_svr_queue_name
-                    from rag.utils.redis_conn import REDIS_CONN
+                    # Check if BookStack virtual document already exists for this KB
+                    existing_docs = list(DocumentService.model.select().where(
+                        DocumentService.model.kb_id == kb["id"],
+                        DocumentService.model.type == FileType.BOOKSTACK,
+                        DocumentService.model.parser_id == "bookstack"
+                    ))
 
-                    # Create BookStack chapter fetch task
-                    task = {
-                        "id": get_uuid(),
-                        "kb_id": kb["id"],
-                        "tenant_id": kb["tenant_id"],
-                        "task_type": "bookstack_chapter_doc",
-                        "booknames": booknames,
-                        "bookstack_config": req.get("parser_config", {}).get("bookstack", {}),
-                        "from_page": 0,
-                        "to_page": 100000000,
-                        "progress": 0.0,
-                        "priority": 0
-                    }
+                    if existing_docs:
+                        # Update existing document's parser_config
+                        info = {"run": str(1), "progress": 0, "progress_msg": "", "chunk_num": 0, "token_num": 0}
+                        virtual_doc = existing_docs[0]
+                        DocumentService.update_parser_config(virtual_doc.id, {"booknames": booknames})
+                        DocumentService.update_by_id(virtual_doc.id, info)
+                        logging.info(f"Updated existing BookStack document {virtual_doc.id} with new booknames: {booknames}")
+                    else:
+                        # Create new virtual document for BookStack content
+                        doc_name = f"Sync BookStack Chapters"
+                        virtual_doc = DocumentService.insert({
+                            "id": get_uuid(),
+                            "kb_id": kb["id"],
+                            "parser_id": "bookstack_chapter_doc",
+                            "parser_config": {"booknames": booknames},
+                            "created_by": current_user.id,
+                            "type": FileType.BOOKSTACK,
+                            "name": doc_name,
+                            "suffix": "bookstack",
+                            "location": "",
+                            "size": 0,
+                        })
 
-                    # Insert task to database
-                    bulk_insert_into_db(Task, [task], True)
+                        # Add to file system
+                        _, kb_obj = KnowledgebaseService.get_by_id(kb["id"])
+                        kb_folder = FileService.get_kb_folder(kb_obj.tenant_id)
+                        FileService.add_file_from_kb(virtual_doc.to_dict(), kb_folder["id"], kb_obj.tenant_id)
+                        logging.info(f"Created new BookStack virtual document {virtual_doc.id}")
 
-                    # Queue task to Redis
-                    REDIS_CONN.queue_product(
-                        get_svr_queue_name(task["priority"]),
-                        message=task
-                    )
+                    doc = virtual_doc.to_dict()
+                    doc["tenant_id"] = current_user.id
 
-                    logging.info(f"BookStack chapter fetch task queued for KB {kb['id']} with booknames: {booknames}")
+                    bucket, name = File2DocumentService.get_storage_address(doc_id=doc["id"])
+                    queue_tasks(doc, bucket, name, 0)
+                    
+                    logging.info(f"BookStack chapter fetch task queued for KB {kb['id']} with booknames: {booknames}, doc_id: {virtual_doc.id}")
                 except Exception as e:
                     logging.error(f"Failed to queue BookStack task: {str(e)}")
 
@@ -198,7 +219,7 @@ def sync_bookstack():
 
         # Create BookStack sync task
         from api.utils import get_uuid
-        from api.db.services.task_service import TaskService
+        
         from api.db.db_models import Task
         from api.db.db_utils import bulk_insert_into_db
         from rag.settings import get_svr_queue_name

@@ -331,7 +331,6 @@ def list_docs():
 
     try:
         docs, tol = DocumentService.get_by_kb_id(kb_id, page_number, items_per_page, orderby, desc, keywords, run_status, types, suffix)
-
         if create_time_from or create_time_to:
             filtered_docs = []
             for doc in docs:

@@ -691,7 +691,7 @@ async def run_bookstack_connector(task, embedding_model, progress_callback):
         raise
 
 
-async def run_bookstack_chapter_doc(task, embedding_model, progress_callback):
+async def run_bookstack_chapter_doc(task, progress_callback):
     """
     Run BookStack connector to fetch chapters for specific documents
     Called when KB updated with booknames config
@@ -711,7 +711,7 @@ async def run_bookstack_chapter_doc(task, embedding_model, progress_callback):
         bookstack_config = {
             "include_books": False,
             "include_chapters": True,
-            "include_pages": True,
+            "include_pages": False,
             "include_shelves": False,
             **task.get("bookstack_config", {})
         }
@@ -764,20 +764,22 @@ async def do_handle_task(task):
         progress_callback(-1, msg="Task has been canceled.")
         return
 
-    try:
-        # bind embedding model
-        embedding_model = LLMBundle(task_tenant_id, LLMType.EMBEDDING, llm_name=task_embedding_id, lang=task_language)
-        vts, _ = embedding_model.encode(["ok"])
-        vector_size = len(vts[0])
-    except Exception as e:
-        error_message = f'Fail to bind embedding model: {str(e)}'
-        progress_callback(-1, msg=error_message)
-        logging.exception(error_message)
-        raise
-
-    init_kb(task, vector_size)
-
     task_type = task.get("task_type", "")
+    logging.info(f"Task type: {task_type}")
+    if task_type != "bookstack_chapter_doc":
+        try:
+            # bind embedding model
+            embedding_model = LLMBundle(task_tenant_id, LLMType.EMBEDDING, llm_name=task_embedding_id, lang=task_language)
+            vts, _ = embedding_model.encode(["ok"])
+            vector_size = len(vts[0])
+        except Exception as e:
+            error_message = f'Fail to bind embedding model: {str(e)}'
+            progress_callback(-1, msg=error_message)
+            logging.exception(error_message)
+            raise
+
+        init_kb(task, vector_size)
+
     if task_type == "dataflow":
         task_dataflow_dsl = task["dsl"]
         task_dataflow_id = task["dataflow_id"]
@@ -813,7 +815,7 @@ async def do_handle_task(task):
         token_count = 100
     elif task_type == "bookstack_chapter_doc":
         start_ts = timer()
-        chunks = await run_bookstack_chapter_doc(task, embedding_model, progress_callback)
+        chunks = await run_bookstack_chapter_doc(task, progress_callback)
         if not chunks:
             progress_callback(prog=1.0, msg="No chapters fetched from BookStack")
             return

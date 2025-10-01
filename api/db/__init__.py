@@ -51,10 +51,11 @@ class FileType(StrEnum):
     VISUAL = 'visual'
     AURAL = 'aural'
     VIRTUAL = 'virtual'
+    BOOKSTACK = 'bookstack'
     FOLDER = 'folder'
     OTHER = "other"
 
-VALID_FILE_TYPES = {FileType.PDF, FileType.DOC, FileType.VISUAL, FileType.AURAL, FileType.VIRTUAL, FileType.FOLDER, FileType.OTHER}
+VALID_FILE_TYPES = {FileType.PDF, FileType.DOC, FileType.VISUAL, FileType.AURAL, FileType.VIRTUAL, FileType.FOLDER, FileType.OTHER, FileType.BOOKSTACK}
 
 class LLMType(StrEnum):
     CHAT = 'chat'
