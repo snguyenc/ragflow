@@ -29,7 +29,7 @@ from PIL import Image
 
 from deepdoc.parser import DocxParser, MarkdownElementExtractor, MarkdownParser, PdfParser, TxtParser
 from rag.nlp import concat_img, find_codec, naive_merge, naive_merge_with_images, naive_merge_docx, rag_tokenizer, tokenize_chunks, tokenize_chunks_with_images, tokenize_table
-from rag.svr.bookstack_svr import fetch_bookstack_chapter_content
+from rag.svr.bookstack_svr import fetch_bookstack_pages
 
 class Docx(DocxParser):
     def __init__(self):
@@ -398,7 +398,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
     # Handle BookStack documents
     callback(0.1, "Start to fetch BookStack content.")
     try:
-        pages = fetch_bookstack_chapter_content(parser_config, kwargs, callback)
+        pages = fetch_bookstack_pages(parser_config, kwargs, callback)
         callback(0.8, "Finish fetching BookStack content.")
 
         for page in pages:
@@ -406,7 +406,13 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
             metadata = page.metadata
             doc["category_kwd"] = metadata.get("category", "")
             doc["guide_kwd"] = metadata.get("guide", "")
-            doc["article_type_kwd"] = metadata.get("ArticleType", "Topic")
+            doc["page_id"] = metadata.get("page_id", "")
+            doc["revision_count"] = metadata.get("revision_count", 1)
+            doc["book_id"] = metadata.get("book_id", "")
+            doc["chapter_id"] = metadata.get("chapter_id", "")
+            
+            tags_map = {tag["name"]: tag["value"] for tag in metadata.get("tags", [])}
+            doc["article_type_kwd"] = tags_map.get("ArticleType", "Topic")
 
             sections.append(page.content)
 

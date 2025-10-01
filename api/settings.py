@@ -207,7 +207,12 @@ def init_settings():
         "include_books": os.environ.get("BOOKSTACK_INCLUDE_BOOKS", "true").lower() == "true",
         "include_chapters": os.environ.get("BOOKSTACK_INCLUDE_CHAPTERS", "true").lower() == "true",
         "include_pages": os.environ.get("BOOKSTACK_INCLUDE_PAGES", "true").lower() == "true",
-        "include_shelves": os.environ.get("BOOKSTACK_INCLUDE_SHELVES", "true").lower() == "true"
+        "include_shelves": os.environ.get("BOOKSTACK_INCLUDE_SHELVES", "true").lower() == "true",
+        "scheduler": {
+            "enabled": os.environ.get("BOOKSTACK_SCHEDULER_ENABLED", "true").lower() == "true",
+            "check_interval_minutes": int(os.environ.get("BOOKSTACK_CHECK_INTERVAL", "60")),
+            "daily_sync_time": os.environ.get("BOOKSTACK_DAILY_SYNC_TIME", "00:00")
+        }
     }
 
     global SMTP_CONF, MAIL_SERVER, MAIL_PORT, MAIL_USE_SSL, MAIL_USE_TLS

@@ -114,7 +114,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
 
 
 
-def fetch_bookstack_chapter_content(parser_config, kwargs, callback):
+def fetch_bookstack_pages(parser_config, kwargs, callback):
     """
     Fetch BookStack chapter content and convert pages to sections format
 

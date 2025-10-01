@@ -70,6 +70,15 @@ def update_progress():
 
 def signal_handler(sig, frame):
     logging.info("Received interrupt signal, shutting down...")
+
+    # Shutdown BookStack scheduler
+    try:
+        from rag.svr.bookstack_scheduler import stop_bookstack_scheduler
+        logging.info("Stopping BookStack scheduler...")
+        stop_bookstack_scheduler()
+    except Exception as e:
+        logging.warning(f"Failed to stop BookStack scheduler: {str(e)}")
+
     shutdown_all_mcp_sessions()
     stop_event.set()
     time.sleep(1)
@@ -126,6 +135,15 @@ if __name__ == '__main__':
 
     GlobalPluginManager.load_plugins()
 
+    # Start BookStack scheduler
+    def start_bookstack_scheduler():
+        try:
+            from rag.svr.bookstack_scheduler import start_bookstack_scheduler
+            logging.info("Starting BookStack scheduler...")
+            start_bookstack_scheduler()
+        except Exception as e:
+            logging.warning(f"Failed to start BookStack scheduler: {str(e)}")
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
@@ -134,11 +152,15 @@ if __name__ == '__main__':
         t = threading.Thread(target=update_progress, daemon=True)
         t.start()
 
+    # Only start background services in the actual server process
     if RuntimeConfig.DEBUG:
         if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
             threading.Timer(1.0, delayed_start_update_progress).start()
+            threading.Timer(2.0, start_bookstack_scheduler).start()
     else:
+        # In production, no reloader, so start directly
         threading.Timer(1.0, delayed_start_update_progress).start()
+        threading.Timer(2.0, start_bookstack_scheduler).start()
 
     # init smtp server
     if settings.SMTP_CONF:
