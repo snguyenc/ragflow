@@ -1,0 +1,9 @@
+kill -9 $(ps aux | grep -E "(ragflow_server\.py|task_executor\.py)" | grep -v grep | awk '{print $2}')
+
+   source .venv/bin/activate
+   export PYTHONPATH=$(pwd)
+   bash docker/launch_backend_service.sh
+
+docker compose -f docker/docker-compose-base.yml up -d
+
+uv sync --python 3.10 --all-extras
