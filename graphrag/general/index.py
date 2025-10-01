@@ -55,9 +55,11 @@ async def run_graphrag(
     tenant_id, kb_id, doc_id = row["tenant_id"], str(row["kb_id"]), row["doc_id"]
     chunks = []
     chunks_meta = []
-    for d in settings.retrievaler.chunk_list(doc_id, tenant_id, [kb_id], fields=["content_with_weight", "doc_id", "hierarchy_path_kwd"]):
+    for d in settings.retrievaler.chunk_list(doc_id, tenant_id, [kb_id], fields=["content_with_weight", "doc_id", "hierarchy_path_kwd","docnm_kwd"]):
         chunks.append(d["content_with_weight"])
-        chunks_meta.append(d.get("hierarchy_path_kwd", ""))
+        docnm_kwd = d.get("docnm_kwd", "")
+        hierarchy_path_kwd = d.get("hierarchy_path_kwd", "")
+        chunks_meta.append(hierarchy_path_kwd if hierarchy_path_kwd != "" else docnm_kwd)
 
     with trio.fail_after(max(120, len(chunks) * 60 * 10) if enable_timeout_assertion else 10000000000):
         subgraph = await generate_subgraph(

@@ -323,7 +323,7 @@ async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks):
         "kb_id": kb_id,
         "available_int": 0,
     }
-    print("graph_node_to_chunk", meta)
+    #print("graph_node_to_chunk", meta)
     chunk["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(chunk["content_ltks"])
     #include source in entity name for semantic search
     encode_entity_name = "\n".join(hierarchy_path) + ":" + ent_name 
@@ -379,7 +379,7 @@ async def graph_edge_to_chunk(kb_id, embd_mdl, from_ent_name, to_ent_name, meta,
         "kb_id": kb_id,
         "available_int": 0,
     }
-    print("graph_edge_to_chunk", meta)
+    #print("graph_edge_to_chunk", meta)
     chunk["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(chunk["content_ltks"])
     #source already in descriptions
     txt = f":{from_ent_name}->{to_ent_name}:{meta['description']}"
