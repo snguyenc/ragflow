@@ -72,14 +72,15 @@ class KGSearch(Dealer):
             for f in flds:
                 if f in ent and ent[f] is None:
                     del ent[f]
-            #logging.info(f"_ent_info_from_: {ent['entity_kwd']} {ent['_score']} < {sim_thr}")
-            if get_float(ent.get("_score", 0)) < sim_thr:
+            score = get_float(ent.get("_score", 0))
+            logging.info(f"_ent_info_from_: {ent['entity_kwd']} {score} < {sim_thr}")
+            if score < sim_thr:
                 continue
             if isinstance(ent["entity_kwd"], list):
                 ent["entity_kwd"] = ent["entity_kwd"][0]
             res[ent["entity_kwd"]] = {
                 "sim": get_float(ent.get("_score", 0)),
-                "pagerank": get_float(ent.get("rank_flt", 0)),
+                "pagerank": get_float(ent.get("rank_flt", 1)),
                 "n_hop_ents": json.loads(ent.get("n_hop_with_weight", "[]")),
                 "description": ent.get("content_with_weight", "{}")
             }
@@ -90,8 +91,9 @@ class KGSearch(Dealer):
         es_res = self.dataStore.getFields(es_res, ["content_with_weight", "_score", "from_entity_kwd", "to_entity_kwd",
                                                    "weight_int"])
         for _, ent in es_res.items():
-            if get_float(ent["_score"]) < sim_thr:
-                #logging.info(f"_relation_info_from_: {ent['from_entity_kwd']} {ent['to_entity_kwd']} {ent['_score']} < {sim_thr}")
+            score = get_float(ent.get("_score", 0))
+            logging.info(f"_relation_info_from_: {ent['from_entity_kwd']} => {ent['to_entity_kwd']} {score} < {sim_thr}")
+            if score < sim_thr:
                 continue
             f, t = sorted([ent["from_entity_kwd"], ent["to_entity_kwd"]])
             if isinstance(f, list):
@@ -99,7 +101,7 @@ class KGSearch(Dealer):
             if isinstance(t, list):
                 t = t[0]
             res[(f, t)] = {
-                "sim": get_float(ent["_score"]),
+                "sim": get_float(ent.get("_score", 0)),
                 "pagerank": get_float(ent.get("weight_int", 0)),
                 "description": ent["content_with_weight"]
             }
@@ -156,6 +158,7 @@ class KGSearch(Dealer):
                   **kwargs
                ):
         qst = question
+        meta_keywords = kwargs.get("meta_keywords", [])
         filters = self.get_filters({"kb_ids": kb_ids})
         if isinstance(tenant_ids, str):
             tenant_ids = tenant_ids.split(",")
@@ -163,13 +166,17 @@ class KGSearch(Dealer):
         ty_kwds = []
         try:
             ty_kwds, ents = self.query_rewrite(llm, qst, [index_name(tid) for tid in tenant_ids], kb_ids)
-            logging.info(f"Q: {qst}, Types: {ty_kwds}, Entities: {ents}")
+            if meta_keywords:
+                ty_kwds = meta_keywords
+                
+            logging.info(f"Q: {qst}, Types: {ty_kwds}, Entities: {ents}, ")
         except Exception as e:
             logging.exception(e)
             ents = [qst]
             pass
         
-        logging.info(f"search index: {idxnms}, kb_ids: {kb_ids} filters: {filters}")
+        ents = [qst] + ents
+        logging.info(f"search index: {idxnms}, kb_ids: {kb_ids} filters: {ents}")
 
         ents_from_query = self.get_relevant_ents_by_keywords(ents, filters, idxnms, kb_ids, emb_mdl, ent_sim_threshold)
         ents_from_types = self.get_relevant_ents_by_types(ty_kwds, filters, idxnms, kb_ids, 10000)
@@ -235,9 +242,14 @@ class KGSearch(Dealer):
         ents = []
         relas = []
         for n, ent in ents_from_query:
+            ent_pagerank = ent.get("pagerank", 1)
+            if ent_pagerank < 1:
+                ent_pagerank = 1
+                
+            print("ent_pagerank", ent_pagerank, "sim", ent["sim"])
             ents.append({
                 "Entity": n,
-                "Score": "%.2f" % (ent["sim"] * ent["pagerank"]),
+                "Score": "%.2f" % (ent["sim"] * ent_pagerank),
                 "Description": json.loads(ent["description"]).get("description", "") if ent["description"] else ""
             })
             max_token -= num_tokens_from_string(str(ents[-1]))

@@ -24,7 +24,7 @@ from rag.utils import rmSpace, get_float
 from rag.nlp import rag_tokenizer, query
 import numpy as np
 from rag.utils.doc_store_conn import DocStoreConnection, MatchDenseExpr, FusionExpr, OrderByExpr
-
+from underthesea import word_tokenize
 
 def index_name(uid): return f"ragflow_{uid}"
 
@@ -103,6 +103,7 @@ class Dealer:
         else:
             highlightFields = ["content_ltks", "title_tks"] if highlight else []
             matchText, keywords = self.qryr.question(qst, min_match=0.3)
+            print("matchText: ", matchText.fields, matchText.matching_text)
             if emb_mdl is None:
                 matchExprs = [matchText]
                 res = self.dataStore.search(src, highlightFields, filters, matchExprs, orderBy, offset, limit,
@@ -322,7 +323,8 @@ class Dealer:
                         vtweight=0.7, cfield="content_ltks",
                         rank_feature: dict | None = None):
         _, keywords = self.qryr.question(query)
-
+        #keywords = word_tokenize(query)
+        print("rerank_by_model: token question", query," -- ", keywords)
         for i in sres.ids:
             if isinstance(sres.field[i].get("important_kwd", []), str):
                 sres.field[i]["important_kwd"] = [sres.field[i]["important_kwd"]]

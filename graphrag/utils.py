@@ -430,6 +430,7 @@ async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, chang
     global chat_limiter
     start = trio.current_time()
 
+    print("delete set_graph", search.index_name(tenant_id), kb_id)
     await trio.to_thread.run_sync(settings.docStoreConn.delete, {"knowledge_graph_kwd": ["graph", "subgraph"]}, search.index_name(tenant_id), kb_id)
 
     if change.removed_nodes:

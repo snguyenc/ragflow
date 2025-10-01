@@ -45,7 +45,25 @@ Answer type pool: {{
  'EMOJI': ['🎉', '🚀'],
  'BEHAVIOR': ['POSITIVE FEEDBACK', 'NEGATIVE CRITICISM'],
  'TONE': ['FORMAL', 'INFORMAL'],
- 'LOCATION': ['DOWNTOWN', 'SUBURBS']
+ 'LOCATION': ['DOWNTOWN', 'SUBURBS'],
+  'CARD_PRODUCT': ['THẺ TÍN DỤNG SACOMBANK', 'THẺ VISA PLATINUM'],
+  'PAYMENT_NETWORK': ['VISA', 'MASTERCARD'],
+  'BANK': ['SACOMBANK', 'VIETCOMBANK'],
+  'CARD_TIER': ['PLATINUM', 'GOLD'],
+  'CASHBACK_FEATURE': ['HOÀN TIỀN 2%', 'CASHBACK KHÔNG GIỚI HẠN'],
+  'REWARD_PROGRAM': ['TÍCH ĐIỂM MILES', 'QUÀ TẶNG SINH NHẬT'],
+  'INSURANCE_BENEFIT': ['BẢO HIỂM DU LỊCH TOÀN CẦU', 'BẢO HIỂM Y TẾ'],
+  'AIRPORT_SERVICE': ['PHÒNG CHỜ CIP', 'FAST TRACK SÂN BAY'],
+  'DINING_BENEFIT': ['GIẢM 20% NHÀ HÀNG', 'ƯU ĐÃI F&B'],
+  'ANNUAL_FEE': ['PHÍ THƯỜNG NIÊN 1.999.000 VND', 'MIỄN PHÍ NĂM ĐẦU'],
+  'INTEREST_RATE': ['LÃI SUẤT 0% 45 NGÀY', 'LÃI SUẤT 2.95%/THÁNG'],
+  'CREDIT_LIMIT': ['HẠN MỨC 500 TRIỆU', 'HẠN MỨC TÍN DỤNG CAO'],
+  'CURRENCY': ['VND', 'USD'],
+  'CUSTOMER_SEGMENT': ['KHÁCH HÀNG VIP', 'SINH VIÊN'],
+  'SPENDING_CATEGORY': ['SHOPPING ONLINE', 'DU LỊCH QUỐC TẾ'],
+  'MERCHANT_PARTNER': ['TIKI', 'GRAB'],
+  'PROMOTION': ['KHUYẾN MÃI TẾT', 'ƯU ĐÃI BLACK FRIDAY'],
+  'ELIGIBILITY': ['THU NHẬP TỐI THIỂU 15 TRIỆU', 'TUỔI TỪ 18-65']
 }}
 ################
 Output:
@@ -75,7 +93,25 @@ Answer type pool: {{
  'EMOJI': ['📅', '⏰'],
  'BEHAVIOR': ['PUNCTUALITY', 'HONESTY'],
  'TONE': ['CONFIDENTIAL', 'SATIRICAL'],
- 'LOCATION': ['CENTRAL PARK', 'DOWNTOWN LIBRARY']
+ 'LOCATION': ['CENTRAL PARK', 'DOWNTOWN LIBRARY'],
+  'CARD_PRODUCT': ['THẺ TÍN DỤNG SACOMBANK', 'THẺ VISA PLATINUM'],
+  'PAYMENT_NETWORK': ['VISA', 'MASTERCARD'],
+  'BANK': ['SACOMBANK', 'VIETCOMBANK'],
+  'CARD_TIER': ['PLATINUM', 'GOLD'],
+  'CASHBACK_FEATURE': ['HOÀN TIỀN 2%', 'CASHBACK KHÔNG GIỚI HẠN'],
+  'REWARD_PROGRAM': ['TÍCH ĐIỂM MILES', 'QUÀ TẶNG SINH NHẬT'],
+  'INSURANCE_BENEFIT': ['BẢO HIỂM DU LỊCH TOÀN CẦU', 'BẢO HIỂM Y TẾ'],
+  'AIRPORT_SERVICE': ['PHÒNG CHỜ CIP', 'FAST TRACK SÂN BAY'],
+  'DINING_BENEFIT': ['GIẢM 20% NHÀ HÀNG', 'ƯU ĐÃI F&B'],
+  'ANNUAL_FEE': ['PHÍ THƯỜNG NIÊN 1.999.000 VND', 'MIỄN PHÍ NĂM ĐẦU'],
+  'INTEREST_RATE': ['LÃI SUẤT 0% 45 NGÀY', 'LÃI SUẤT 2.95%/THÁNG'],
+  'CREDIT_LIMIT': ['HẠN MỨC 500 TRIỆU', 'HẠN MỨC TÍN DỤNG CAO'],
+  'CURRENCY': ['VND', 'USD'],
+  'CUSTOMER_SEGMENT': ['KHÁCH HÀNG VIP', 'SINH VIÊN'],
+  'SPENDING_CATEGORY': ['SHOPPING ONLINE', 'DU LỊCH QUỐC TẾ'],
+  'MERCHANT_PARTNER': ['TIKI', 'GRAB'],
+  'PROMOTION': ['KHUYẾN MÃI TẾT', 'ƯU ĐÃI BLACK FRIDAY'],
+  'ELIGIBILITY': ['THU NHẬP TỐI THIỂU 15 TRIỆU', 'TUỔI TỪ 18-65']
 }}
 
 ################
@@ -88,7 +124,8 @@ Output:
 #############################
 Example 3:
 
-Query: "What is the role of education in reducing poverty?"
+Query: "so sánh chi tiết giúp tôi các loại thẻ liên kết có tính
+   năng hoàn tiền?"
 Answer type pool: {{
  'PERSONAL LIFE': ['MANAGING WORK-LIFE BALANCE', 'HOME IMPROVEMENT PROJECTS'],
  'STRATEGY': ['MARKETING STRATEGIES FOR Q4', 'EXPANDING INTO NEW MARKETS'],
@@ -105,14 +142,34 @@ Answer type pool: {{
  'EMOJI': ['💻', '📱'],
  'BEHAVIOR': ['TEAMWORK', 'LEADERSHIP'],
  'TONE': ['FORMAL MEETING', 'CASUAL CONVERSATION'],
- 'LOCATION': ['URBAN CITY CENTER', 'RURAL COUNTRYSIDE']
+ 'LOCATION': ['URBAN CITY CENTER', 'RURAL COUNTRYSIDE'],
+ ,
+ 'LOCATION': ['CENTRAL PARK', 'DOWNTOWN LIBRARY'],
+  'CARD_PRODUCT': ['THẺ TÍN DỤNG SACOMBANK', 'THẺ VISA PLATINUM'],
+  'PAYMENT_NETWORK': ['VISA', 'MASTERCARD'],
+  'BANK': ['SACOMBANK', 'VIETCOMBANK'],
+  'CARD_TIER': ['PLATINUM', 'GOLD'],
+  'CASHBACK_FEATURE': ['HOÀN TIỀN 2%', 'CASHBACK KHÔNG GIỚI HẠN'],
+  'REWARD_PROGRAM': ['TÍCH ĐIỂM MILES', 'QUÀ TẶNG SINH NHẬT'],
+  'INSURANCE_BENEFIT': ['BẢO HIỂM DU LỊCH TOÀN CẦU', 'BẢO HIỂM Y TẾ'],
+  'AIRPORT_SERVICE': ['PHÒNG CHỜ CIP', 'FAST TRACK SÂN BAY'],
+  'DINING_BENEFIT': ['GIẢM 20% NHÀ HÀNG', 'ƯU ĐÃI F&B'],
+  'ANNUAL_FEE': ['PHÍ THƯỜNG NIÊN 1.999.000 VND', 'MIỄN PHÍ NĂM ĐẦU'],
+  'INTEREST_RATE': ['LÃI SUẤT 0% 45 NGÀY', 'LÃI SUẤT 2.95%/THÁNG'],
+  'CREDIT_LIMIT': ['HẠN MỨC 500 TRIỆU', 'HẠN MỨC TÍN DỤNG CAO'],
+  'CURRENCY': ['VND', 'USD'],
+  'CUSTOMER_SEGMENT': ['KHÁCH HÀNG VIP', 'SINH VIÊN'],
+  'SPENDING_CATEGORY': ['SHOPPING ONLINE', 'DU LỊCH QUỐC TẾ'],
+  'MERCHANT_PARTNER': ['TIKI', 'GRAB'],
+  'PROMOTION': ['KHUYẾN MÃI TẾT', 'ƯU ĐÃI BLACK FRIDAY'],
+  'ELIGIBILITY': ['THU NHẬP TỐI THIỂU 15 TRIỆU', 'TUỔI TỪ 18-65']
 }}
 
 ################
 Output:
 {{
-  "answer_type_keywords": ["STRATEGY", "PERSON"],
-  "entities_from_query": ["School access", "Literacy rates", "Job training", "Income inequality"]
+  "answer_type_keywords": ["CARD_PRODUCT", "CASHBACK_FEATURE", "CARD_TIER"],
+  "entities_from_query": ["thẻ liên kết", "hoàn tiền", "cashback"]
 }}
 #############################
 Example 4:
@@ -135,7 +192,25 @@ Answer type pool: {{
  'EMOJI': ['🏢', '🌍'],
  'BEHAVIOR': ['POSITIVE THINKING', 'STRESS MANAGEMENT'],
  'TONE': ['FRIENDLY', 'PROFESSIONAL'],
- 'LOCATION': ['DOWNTOWN', 'SUBURBS']
+ 'LOCATION': ['DOWNTOWN', 'SUBURBS'],
+  'CARD_PRODUCT': ['THẺ TÍN DỤNG SACOMBANK', 'THẺ VISA PLATINUM'],
+  'PAYMENT_NETWORK': ['VISA', 'MASTERCARD'],
+  'BANK': ['SACOMBANK', 'VIETCOMBANK'],
+  'CARD_TIER': ['PLATINUM', 'GOLD'],
+  'CASHBACK_FEATURE': ['HOÀN TIỀN 2%', 'CASHBACK KHÔNG GIỚI HẠN'],
+  'REWARD_PROGRAM': ['TÍCH ĐIỂM MILES', 'QUÀ TẶNG SINH NHẬT'],
+  'INSURANCE_BENEFIT': ['BẢO HIỂM DU LỊCH TOÀN CẦU', 'BẢO HIỂM Y TẾ'],
+  'AIRPORT_SERVICE': ['PHÒNG CHỜ CIP', 'FAST TRACK SÂN BAY'],
+  'DINING_BENEFIT': ['GIẢM 20% NHÀ HÀNG', 'ƯU ĐÃI F&B'],
+  'ANNUAL_FEE': ['PHÍ THƯỜNG NIÊN 1.999.000 VND', 'MIỄN PHÍ NĂM ĐẦU'],
+  'INTEREST_RATE': ['LÃI SUẤT 0% 45 NGÀY', 'LÃI SUẤT 2.95%/THÁNG'],
+  'CREDIT_LIMIT': ['HẠN MỨC 500 TRIỆU', 'HẠN MỨC TÍN DỤNG CAO'],
+  'CURRENCY': ['VND', 'USD'],
+  'CUSTOMER_SEGMENT': ['KHÁCH HÀNG VIP', 'SINH VIÊN'],
+  'SPENDING_CATEGORY': ['SHOPPING ONLINE', 'DU LỊCH QUỐC TẾ'],
+  'MERCHANT_PARTNER': ['TIKI', 'GRAB'],
+  'PROMOTION': ['KHUYẾN MÃI TẾT', 'ƯU ĐÃI BLACK FRIDAY'],
+  'ELIGIBILITY': ['THU NHẬP TỐI THIỂU 15 TRIỆU', 'TUỔI TỪ 18-65']
 }}
 ################
 Output:

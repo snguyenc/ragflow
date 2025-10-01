@@ -466,7 +466,7 @@ def knowledge_graph(kb_id):
     sres = settings.retrievaler.search(req, search.index_name(kb.tenant_id), [kb_id])
     if not len(sres.ids):
         return get_json_result(data=obj)
-
+    print("sres.ids", sres.ids)
     for id in sres.ids[:1]:
         ty = sres.field[id]["knowledge_graph_kwd"]
         try:

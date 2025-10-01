@@ -386,6 +386,7 @@ def knowledge_graph():
         "knowledge_graph_kwd": ["graph", "mind_map"]
     }
     sres = settings.retrievaler.search(req, search.index_name(tenant_id), kb_ids)
+    print(sres)
     obj = {"graph": {}, "mind_map": {}}
     for id in sres.ids[:2]:
         ty = sres.field[id]["knowledge_graph_kwd"]

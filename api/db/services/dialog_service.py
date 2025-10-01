@@ -401,12 +401,16 @@ def chat(dialog, messages, stream=True, **kwargs):
     if prompt_config.get("cross_languages"):
         questions = [cross_languages(dialog.tenant_id, dialog.llm_id, questions[0], prompt_config["cross_languages"])]
 
+    meta_keywords = []
     if dialog.meta_data_filter:
         metas = DocumentService.get_meta_by_kbs(dialog.kb_ids)
         #logging.info("Meta data filter: {}-{}".format(metas, dialog.meta_data_filter.get("method")))
         if dialog.meta_data_filter.get("method") == "automatic":
             filters = gen_meta_filter(chat_mdl, metas, questions[-1])
-            logging.info("Meta data filter 2s: {}".format(filters))
+            if len(filters) > 0:
+                meta_keywords = [f["value"] for f in filters]
+                
+            logging.info("Meta data filter 2s: {} {}".format(filters, meta_keywords))
             attachments.extend(meta_filter(metas, filters))
             if not attachments:
                 attachments = []
@@ -474,7 +478,8 @@ def chat(dialog, messages, stream=True, **kwargs):
                 kbinfos["doc_aggs"].extend(tav_res["doc_aggs"])
             if prompt_config.get("use_kg"):
                 ck = settings.kg_retrievaler.retrieval(" ".join(questions), tenant_ids, dialog.kb_ids, embd_mdl,
-                                                       LLMBundle(dialog.tenant_id, LLMType.CHAT))
+                                                       LLMBundle(dialog.tenant_id, LLMType.CHAT), meta_keywords=meta_keywords)
+
                 if ck["content_with_weight"]:
                     kbinfos["chunks"].insert(0, ck)
 

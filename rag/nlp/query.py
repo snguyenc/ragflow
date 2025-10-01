@@ -21,7 +21,7 @@ from collections import defaultdict
 
 from rag.utils.doc_store_conn import MatchTextExpr
 from rag.nlp import rag_tokenizer, term_weight, synonym
-
+from underthesea import word_tokenize
 
 class FulltextQueryer:
     def __init__(self):
@@ -95,6 +95,7 @@ class FulltextQueryer:
         if not self.isChinese(txt):
             txt = FulltextQueryer.rmWWW(txt)
             tks = rag_tokenizer.tokenize(txt).split()
+            #tks = word_tokenize(txt)
             keywords = [t for t in tks if t]
             tks_w = self.tw.weights(tks, preprocess=False)
             tks_w = [(re.sub(r"[ \\\"'^]", "", tk), w) for tk, w in tks_w]
