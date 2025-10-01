@@ -403,6 +403,11 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
 
         for page in pages:
             #logging.info(f"BookStack page content: {page.content}")
+            metadata = page.metadata
+            doc["category_kwd"] = metadata.get("category", "")
+            doc["guide_kwd"] = metadata.get("guide", "")
+            doc["article_type_kwd"] = metadata.get("ArticleType", "Topic")
+
             sections.append(page.content)
 
         callback(0.9, "Finish fetching BookStack content.")

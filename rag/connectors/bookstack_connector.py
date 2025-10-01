@@ -224,17 +224,8 @@ class BookStackConnector:
         url = self.client.build_app_url(
             f"/books/{chapter_data.get('book_slug', '')}/chapter/{chapter_data.get('slug', chapter_id)}")
 
-        updated_at, created_at = None, None
-        if chapter_data.get('updated_at'):
-            try:
-                updated_at = datetime.fromisoformat(str(chapter_data['updated_at']).replace('Z', '+00:00'))
-            except ValueError:
-                pass
-        if chapter_data.get('created_at'):
-            try:
-                created_at = datetime.fromisoformat(str(chapter_data['created_at']).replace('Z', '+00:00'))
-            except ValueError:
-                pass
+        updated_at = self._get_date(chapter_data.get('updated_at'))
+        created_at = self._get_date(chapter_data.get('created_at'))
 
         return BookStackDocument(
             doc_id=chapter_id,
@@ -247,6 +238,7 @@ class BookStackConnector:
             metadata={
                 "chapter_id": chapter_id,
                 "book_id": str(chapter_data.get('book_id', '')),
+                "book_name": str(chapter_data.get('book_name', '')),
                 "description": description
             }
         )
@@ -422,9 +414,13 @@ class BookStackConnector:
 
                 except BookStackClientError as e:
                     logging.error(f"Error fetching {content_type}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     break
                 except Exception as e:
                     logging.error(f"Unexpected error fetching {content_type}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     break
 
         if progress_callback:
@@ -468,13 +464,13 @@ if __name__ == "__main__":
         token_id="GyEiV5NkEZ8ytCgSH4hXvB7BVwZQ9knP",
         token_secret="puKhXEpOAarRvE3A7jvDdUE9pB204fXt",
         batch_size=50,
-        include_chapter_to_pages=True,
+        include_book_to_chapters=True,
     )
 
     print("global_config", "global_config")
     try:
         print("About to call fetch_documents()")
-        result = connector.fetch_documents(chapter_id="9")
+        result = connector.fetch_documents(book_names=["Thẻ tín dụng"])
         print("fetch_documents() returned:", type(result))
         # Since it returns an Iterator, we need to iterate
         for batch in result:

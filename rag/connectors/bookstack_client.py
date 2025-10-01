@@ -169,6 +169,7 @@ class BookStackClient:
         book_ids = []
         books = self.get_books(count=count, offset=offset, updated_since=updated_since, updated_until=updated_until)
         book_map = {book['name']: book['id'] for book in books}
+        book_id_map = {book['id']: book['name'] for book in books}
 
         for book_name in book_names:
             if book_name in book_map:
@@ -192,7 +193,9 @@ class BookStackClient:
 
         chapters = self.get_chapters(count=count, offset=offset, updated_since=updated_since, updated_until=updated_until)
         chapters = [chapter for chapter in chapters if chapter['book_id'] in book_ids]   
-
+        for chapter in chapters:
+            chapter['book_name'] = book_id_map[chapter['book_id']]
+            
         return chapters
 
     def get_chapters(self, count: int = 50, offset: int = 0,

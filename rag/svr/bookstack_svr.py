@@ -64,8 +64,8 @@ async def run_bookstack_chapter_doc(task, progress_callback):
             for bookstack_doc in batch:
                 doc_count += 1
                 progress_callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
-                
-                parser_config = {**task_parser_config, "source_chapter_id": bookstack_doc.doc_id}
+                category = bookstack_doc.metadata.get("book_name", "")
+                parser_config = {**task_parser_config, "source_chapter_id": bookstack_doc.doc_id, "category": category, "guide": bookstack_doc.title}
                 # Create document for this chapter
                 chapter_doc_data = {
                     "id": get_uuid(),
@@ -74,7 +74,7 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                     "parser_config": parser_config,
                     "created_by": "task_executor",
                     "type": FileType.DOC,
-                    "name": f"Chapter: {bookstack_doc.title}.bookstack",
+                    "name": f"{bookstack_doc.title}.bookstack",
                     "suffix": "bookstack",
                     "location": bookstack_doc.url,
                     "metafields": {
@@ -164,6 +164,10 @@ def fetch_bookstack_chapter_content(parser_config, kwargs, callback):
             for bookstack_doc in batch:
                 doc_count += 1
                 callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
+                bookstack_doc.metadata = {
+                    **bookstack_doc.metadata,
+                    **parser_config
+                }
                 docs.append(bookstack_doc)
         
         return docs
