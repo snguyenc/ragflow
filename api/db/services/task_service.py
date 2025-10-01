@@ -370,6 +370,10 @@ def queue_tasks(doc: dict, bucket: str, name: str, priority: int):
             task["from_page"] = i
             task["to_page"] = min(i + 3000, rn)
             parse_task_array.append(task)
+    elif doc["parser_id"] == "bookstack":
+        task = new_task()
+        task["task_type"] = "bookstack"
+        parse_task_array.append(task)
     else:
         parse_task_array.append(new_task())
 

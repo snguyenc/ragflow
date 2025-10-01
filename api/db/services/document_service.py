@@ -648,6 +648,7 @@ class DocumentService(CommonService):
                 bad = 0
                 has_raptor = False
                 has_graphrag = False
+                has_bookstack = False
                 e, doc = DocumentService.get_by_id(d["id"])
                 status = doc.run  # TaskStatus.RUNNING.value
                 priority = 0
@@ -663,6 +664,8 @@ class DocumentService(CommonService):
                         has_raptor = True
                     elif t.task_type == "graphrag":
                         has_graphrag = True
+                    elif t.task_type == "bookstack":
+                        has_bookstack = True
                     priority = max(priority, t.priority)
                 prg /= len(tsks)
                 if finished and bad:
@@ -674,6 +677,9 @@ class DocumentService(CommonService):
                         prg = 0.98 * len(tsks) / (len(tsks) + 1)
                     elif (d["parser_config"].get("graphrag") or {}).get("use_graphrag") and not has_graphrag:
                         queue_raptor_o_graphrag_tasks(d, "graphrag", priority)
+                        prg = 0.98 * len(tsks) / (len(tsks) + 1)
+                    elif ((d["parser_config"].get("bookstack") or {}).get("use_bookstack") or d.get("parser_id") == "bookstack") and not has_bookstack:
+                        queue_bookstack_task(d, priority)
                         prg = 0.98 * len(tsks) / (len(tsks) + 1)
                     else:
                         status = TaskStatus.DONE.value
@@ -688,7 +694,7 @@ class DocumentService(CommonService):
                     info["progress"] = prg
                 if msg:
                     info["progress_msg"] = msg
-                    if msg.endswith("created task graphrag") or msg.endswith("created task raptor"):
+                    if msg.endswith("created task graphrag") or msg.endswith("created task raptor") or msg.endswith("created task bookstack"):
                         info["progress_msg"] += "\n%d tasks are ahead in the queue..."%get_queue_length(priority)
                 else:
                     info["progress_msg"] = "%d tasks are ahead in the queue..."%get_queue_length(priority)

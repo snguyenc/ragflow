@@ -22,6 +22,7 @@ export const formSchema = z.object({
       html4excel: z.boolean(),
       tag_kb_ids: z.array(z.string()).nullish(),
       topn_tags: z.number().optional(),
+      booknames: z.array(z.string()).optional(),
       raptor: z
         .object({
           use_raptor: z.boolean().optional(),

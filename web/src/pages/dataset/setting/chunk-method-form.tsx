@@ -6,6 +6,7 @@ import { DocumentParserType } from '@/constants/knowledge';
 import { useMemo } from 'react';
 import { AudioConfiguration } from './configuration/audio';
 import { BookConfiguration } from './configuration/book';
+import { BookstackConfiguration } from './configuration/bookstack';
 import { EmailConfiguration } from './configuration/email';
 import { KnowledgeGraphConfiguration } from './configuration/knowledge-graph';
 import { LawsConfiguration } from './configuration/laws';
@@ -24,6 +25,7 @@ import { SavingButton } from './saving-button';
 const ConfigurationComponentMap = {
   [DocumentParserType.Naive]: NaiveConfiguration,
   [DocumentParserType.Qa]: QAConfiguration,
+  [DocumentParserType.BookStack]: BookstackConfiguration,
   [DocumentParserType.Resume]: ResumeConfiguration,
   [DocumentParserType.Manual]: ManualConfiguration,
   [DocumentParserType.Table]: TableConfiguration,

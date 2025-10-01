@@ -53,6 +53,7 @@ export default function DatasetSettings() {
         auto_questions: 0,
         html4excel: false,
         topn_tags: 3,
+        booknames: [],
         raptor: {
           use_raptor: false,
         },

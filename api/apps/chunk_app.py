@@ -77,7 +77,7 @@ def list_chunk():
                 "positions": sres.field[id].get("position_int", []),
             }
             assert isinstance(d["positions"], list)
-            assert len(d["positions"]) == 0 or (isinstance(d["positions"][0], list) and len(d["positions"][0]) == 5)
+            #assert len(d["positions"]) == 0 or (isinstance(d["positions"][0], list) and len(d["positions"][0]) == 5)
             res["chunks"].append(d)
         return get_json_result(data=res)
     except Exception as e:

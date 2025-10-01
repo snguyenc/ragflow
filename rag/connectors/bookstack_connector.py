@@ -1,0 +1,421 @@
+#
+#  Copyright 2024 The InfiniFlow Authors. All Rights Reserved.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+import html
+import json
+import logging
+import re
+import time
+import xxhash
+from datetime import datetime
+from typing import Any, Dict, Iterator, List, Optional, Tuple
+from io import BytesIO
+
+from rag.connectors.bookstack_client import BookStackClient, BookStackClientError
+
+
+class BookStackDocument:
+    """
+    Document representation for BookStack content
+
+    Provides unified interface for different BookStack content types (books, chapters, pages, shelves)
+    """
+
+    def __init__(self,
+                 doc_id: str,
+                 title: str,
+                 content: str,
+                 url: str,
+                 doc_type: str,
+                 updated_at: Optional[datetime] = None,
+                 metadata: Optional[Dict[str, Any]] = None):
+        self.doc_id = doc_id
+        self.title = title
+        self.content = content
+        self.url = url
+        self.doc_type = doc_type
+        self.updated_at = updated_at
+        self.metadata = metadata or {}
+
+    def to_ragflow_chunk(self, kb_id: str, tenant_id: str) -> Dict[str, Any]:
+        """
+        Convert BookStack document to RAGFlow chunk format
+
+        Args:
+            kb_id: Knowledge base ID
+            tenant_id: Tenant ID
+
+        Returns:
+            RAGFlow chunk data structure
+        """
+        # Generate unique ID based on content and doc_id
+        content_hash = xxhash.xxh64((self.content + self.doc_id).encode("utf-8", "surrogatepass")).hexdigest()
+
+        chunk = {
+            "id": content_hash,
+            "content_with_weight": self.content,
+            "doc_id": self.doc_id,
+            "docnm_kwd": self.title,
+            "title_tks": self.title.lower(),
+            "kb_id": str(kb_id),
+            "tenant_id": str(tenant_id),
+            "create_time": str(datetime.now()).replace("T", " ")[:19],
+            "create_timestamp_flt": datetime.now().timestamp(),
+            "img_id": "",
+            "page_num_int": [1],
+            "position_int": [0, len(self.content)],
+            "top_int": [0],
+            "available_int": 1,
+            "metadata": {
+                "source": "bookstack",
+                "type": self.doc_type,
+                "url": self.url,
+                #"updated_at": self.updated_at.isoformat() if self.updated_at else None,
+                **self.metadata
+            }
+        }
+
+        return chunk
+
+
+class BookStackConnector:
+    """
+    BookStack Connector for RAGFlow
+
+    Fetches content from BookStack knowledge management system and converts it
+    to RAGFlow-compatible document chunks for indexing.
+    """
+
+    def __init__(self,
+                 base_url: str,
+                 token_id: str,
+                 token_secret: str,
+                 batch_size: int = 50,
+                 include_books: bool = True,
+                 include_chapters: bool = True,
+                 include_pages: bool = True,
+                 include_shelves: bool = True):
+        """
+        Initialize BookStack connector
+
+        Args:
+            base_url: BookStack instance URL
+            token_id: API token ID
+            token_secret: API token secret
+            batch_size: Batch size for API requests
+            include_books: Whether to include books
+            include_chapters: Whether to include chapters
+            include_pages: Whether to include pages
+            include_shelves: Whether to include shelves
+        """
+        self.client = BookStackClient(base_url, token_id, token_secret)
+        self.batch_size = batch_size
+        self.include_books = include_books
+        self.include_chapters = include_chapters
+        self.include_pages = include_pages
+        self.include_shelves = include_shelves
+
+    def test_connection(self) -> Tuple[bool, Optional[str]]:
+        """
+        Test connection to BookStack
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        try:
+            if not self.client.test_connection():
+                return False, "Unable to connect to BookStack API"
+            return True, None
+        except BookStackClientError as e:
+            return False, f"BookStack connection error: {str(e)}"
+        except Exception as e:
+            return False, f"Unexpected error: {str(e)}"
+
+    def _clean_html_content(self, html_content: str) -> str:
+        """
+        Clean HTML content to plain text
+
+        Args:
+            html_content: HTML content string
+
+        Returns:
+            Cleaned plain text
+        """
+        if not html_content:
+            return ""
+
+        # Unescape HTML entities
+        text = html.unescape(html_content)
+
+        # Remove script and style elements
+        text = re.sub(r'<(script|style).*?</\1>', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+        # Remove HTML tags but keep the content
+        text = re.sub(r'<[^>]+>', ' ', text)
+
+        # Clean up whitespace
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+
+        return text
+
+    def _book_to_document(self, book_data: Dict[str, Any]) -> BookStackDocument:
+        """Convert BookStack book to document"""
+        book_id = str(book_data.get('id', ''))
+        title = str(book_data.get('name', 'Untitled Book'))
+        description = str(book_data.get('description', ''))
+
+        content = f"{title}\n\n{description}"
+        url = self.client.build_app_url(f"/books/{book_data.get('slug', book_id)}")
+
+        updated_at = None
+        if book_data.get('updated_at'):
+            try:
+                updated_at = datetime.fromisoformat(str(book_data['updated_at']).replace('Z', '+00:00'))
+            except ValueError:
+                pass
+
+        return BookStackDocument(
+            doc_id=f"bookstack_book_{book_id}",
+            title=title,
+            content=content,
+            url=url,
+            doc_type="book",
+            updated_at=updated_at,
+            metadata={
+                "bookstack_id": book_id,
+                "description": description
+            }
+        )
+
+    def _chapter_to_document(self, chapter_data: Dict[str, Any]) -> BookStackDocument:
+        """Convert BookStack chapter to document"""
+        chapter_id = str(chapter_data.get('id', ''))
+        title = str(chapter_data.get('name', 'Untitled Chapter'))
+        description = str(chapter_data.get('description', ''))
+
+        content = f"{title}\n\n{description}"
+        url = self.client.build_app_url(
+            f"/books/{chapter_data.get('book_slug', '')}/chapter/{chapter_data.get('slug', chapter_id)}")
+
+        updated_at = None
+        if chapter_data.get('updated_at'):
+            try:
+                updated_at = datetime.fromisoformat(str(chapter_data['updated_at']).replace('Z', '+00:00'))
+            except ValueError:
+                pass
+
+        return BookStackDocument(
+            doc_id=f"bookstack_chapter_{chapter_id}",
+            title=title,
+            content=content,
+            url=url,
+            doc_type="chapter",
+            updated_at=updated_at,
+            metadata={
+                "bookstack_id": chapter_id,
+                "book_id": str(chapter_data.get('book_id', '')),
+                "description": description
+            }
+        )
+
+    def _shelf_to_document(self, shelf_data: Dict[str, Any]) -> BookStackDocument:
+        """Convert BookStack shelf to document"""
+        shelf_id = str(shelf_data.get('id', ''))
+        title = str(shelf_data.get('name', 'Untitled Shelf'))
+        description = str(shelf_data.get('description', ''))
+
+        content = f"{title}\n\n{description}"
+        url = self.client.build_app_url(f"/shelves/{shelf_data.get('slug', shelf_id)}")
+
+        updated_at = None
+        if shelf_data.get('updated_at'):
+            try:
+                updated_at = datetime.fromisoformat(str(shelf_data['updated_at']).replace('Z', '+00:00'))
+            except ValueError:
+                pass
+
+        return BookStackDocument(
+            doc_id=f"bookstack_shelf_{shelf_id}",
+            title=title,
+            content=content,
+            url=url,
+            doc_type="shelf",
+            updated_at=updated_at,
+            metadata={
+                "bookstack_id": shelf_id,
+                "description": description
+            }
+        )
+
+    def _page_to_document(self, page_data: Dict[str, Any]) -> BookStackDocument:
+        """Convert BookStack page to document"""
+        page_id = str(page_data.get('id', ''))
+        title = str(page_data.get('name', 'Untitled Page'))
+
+        # Fetch detailed page content
+        try:
+            detailed_page = self.client.get_page_content(page_id)
+            html_content = detailed_page.get('html', '')
+            raw_content = detailed_page.get('markdown', '') or detailed_page.get('text', '')
+        except BookStackClientError as e:
+            logging.warning(f"Failed to fetch detailed content for page {page_id}: {str(e)}")
+            html_content = ''
+            raw_content = ''
+
+        # Clean HTML content
+        if html_content:
+            content = self._clean_html_content(html_content)
+        else:
+            content = raw_content
+
+        # Combine title with content
+        full_content = f"{title}\n\n{content}" if content else title
+
+        url = self.client.build_app_url(
+            f"/books/{page_data.get('book_slug', '')}/page/{page_data.get('slug', page_id)}")
+
+        updated_at = None
+        updated_at_str = page_data.get('updated_at') or (detailed_page.get('updated_at') if 'detailed_page' in locals() else None)
+        if updated_at_str:
+            try:
+                updated_at = datetime.fromisoformat(str(updated_at_str).replace('Z', '+00:00'))
+            except ValueError:
+                pass
+
+        return BookStackDocument(
+            doc_id=f"bookstack_page_{page_id}",
+            title=title,
+            content=full_content,
+            url=url,
+            doc_type="page",
+            updated_at=updated_at,
+            metadata={
+                "bookstack_id": page_id,
+                "book_id": str(page_data.get('book_id', '')),
+                "chapter_id": str(page_data.get('chapter_id', '')) if page_data.get('chapter_id') else None
+            }
+        )
+
+    def fetch_documents(self,
+                       updated_since: Optional[datetime] = None,
+                       updated_until: Optional[datetime] = None,
+                       progress_callback=None) -> Iterator[List[BookStackDocument]]:
+        """
+        Fetch documents from BookStack
+
+        Args:
+            updated_since: Only fetch documents updated after this date
+            updated_until: Only fetch documents updated before this date
+            progress_callback: Progress callback function
+
+        Yields:
+            Batches of BookStackDocument objects
+        """
+        total_fetched = 0
+
+        # Define content types to fetch
+        content_types = []
+        if self.include_books:
+            content_types.append(("books", self._book_to_document, self.client.get_books))
+        if self.include_chapters:
+            content_types.append(("chapters", self._chapter_to_document, self.client.get_chapters))
+        if self.include_pages:
+            content_types.append(("pages", self._page_to_document, self.client.get_pages))
+        if self.include_shelves:
+            content_types.append(("shelves", self._shelf_to_document, self.client.get_shelves))
+
+        for content_type, converter, fetcher in content_types:
+            if progress_callback:
+                progress_callback(0, f"Fetching {content_type} from BookStack...")
+
+            offset = 0
+            while True:
+                try:
+                    # Fetch batch of items
+                    items = fetcher(
+                        count=self.batch_size,
+                        offset=offset,
+                        updated_since=updated_since,
+                        updated_until=updated_until
+                    )
+
+                    if not items:
+                        break
+
+                    # Convert to documents
+                    documents = []
+                    for item in items:
+                        try:
+                            doc = converter(item)
+                            documents.append(doc)
+                        except Exception as e:
+                            logging.warning(f"Failed to convert {content_type} item {item.get('id')}: {str(e)}")
+                            continue
+
+                    if documents:
+                        total_fetched += len(documents)
+                        if progress_callback:
+                            progress_callback(0, f"Fetched {total_fetched} {content_type} so far...")
+                        yield documents
+
+                    # Check if we got fewer items than requested (end of data)
+                    if len(items) < self.batch_size:
+                        break
+
+                    offset += len(items)
+
+                    # Rate limiting
+                    time.sleep(0.2)
+
+                except BookStackClientError as e:
+                    logging.error(f"Error fetching {content_type}: {str(e)}")
+                    break
+                except Exception as e:
+                    logging.error(f"Unexpected error fetching {content_type}: {str(e)}")
+                    break
+
+        if progress_callback:
+            progress_callback(1.0, f"Fetched {total_fetched} documents from BookStack")
+
+    def create_virtual_file_binary(self, documents: List[BookStackDocument]) -> BytesIO:
+        """
+        Create a virtual file containing document data for RAGFlow processing
+
+        Args:
+            documents: List of BookStack documents
+
+        Returns:
+            BytesIO containing JSON data
+        """
+        data = {
+            "source": "bookstack",
+            "documents": []
+        }
+
+        for doc in documents:
+            doc_data = {
+                "id": doc.doc_id,
+                "title": doc.title,
+                "content": doc.content,
+                "url": doc.url,
+                "type": doc.doc_type,
+                "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+                "metadata": doc.metadata
+            }
+            data["documents"].append(doc_data)
+
+        json_data = json.dumps(data, ensure_ascii=False, indent=2)
+        return BytesIO(json_data.encode('utf-8'))

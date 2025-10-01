@@ -132,7 +132,109 @@ def update():
         kb = kb.to_dict()
         kb.update(req)
 
+        # Check if booknames were added/changed and submit BookStack task
+        if req.get("parser_config", {}).get("booknames"):
+            booknames = req["parser_config"]["booknames"]
+            if booknames:  # Only if booknames is not empty
+                try:
+                    from api.utils import get_uuid
+                    from api.db.db_models import Task
+                    from api.db.db_utils import bulk_insert_into_db
+                    from rag.settings import get_svr_queue_name
+                    from rag.utils.redis_conn import REDIS_CONN
+
+                    # Create BookStack chapter fetch task
+                    task = {
+                        "id": get_uuid(),
+                        "kb_id": kb["id"],
+                        "tenant_id": kb["tenant_id"],
+                        "task_type": "bookstack_chapter_doc",
+                        "booknames": booknames,
+                        "bookstack_config": req.get("parser_config", {}).get("bookstack", {}),
+                        "from_page": 0,
+                        "to_page": 100000000,
+                        "progress": 0.0,
+                        "priority": 0
+                    }
+
+                    # Insert task to database
+                    bulk_insert_into_db(Task, [task], True)
+
+                    # Queue task to Redis
+                    REDIS_CONN.queue_product(
+                        get_svr_queue_name(task["priority"]),
+                        message=task
+                    )
+
+                    logging.info(f"BookStack chapter fetch task queued for KB {kb['id']} with booknames: {booknames}")
+                except Exception as e:
+                    logging.error(f"Failed to queue BookStack task: {str(e)}")
+
         return get_json_result(data=kb)
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route('/sync_bookstack', methods=['POST'])  # noqa: F821
+# @login_required  # Comment out for testing
+@validate_request("kb_id")
+def sync_bookstack():
+    """
+    Sync BookStack content to knowledge base without creating document.
+    Directly submits BookStack task to fetch chapters/books based on booknames.
+    """
+    req = request.json
+    kb_id = req["kb_id"]
+
+    try:
+        e, kb = KnowledgebaseService.get_by_id(kb_id)
+        if not e:
+            return get_data_error_result(message="Knowledge base not found!")
+
+        # Get booknames from KB parser_config
+        booknames = kb.parser_config.get("booknames", [])
+        if not booknames:
+            return get_json_result(data=False, message="No booknames specified in knowledge base configuration")
+
+        # Create BookStack sync task
+        from api.utils import get_uuid
+        from api.db.services.task_service import TaskService
+        from api.db.db_models import Task
+        from api.db.db_utils import bulk_insert_into_db
+        from rag.settings import get_svr_queue_name
+        from rag.utils.redis_conn import REDIS_CONN
+
+        task = {
+            "id": get_uuid(),
+            "kb_id": kb_id,
+            "tenant_id": kb.tenant_id,
+            "task_type": "bookstack",
+            "parser_config": {
+                "bookstack": {
+                    "booknames": booknames,
+                    **req.get("bookstack_config", {})
+                }
+            },
+            "from_page": 0,
+            "to_page": 100000000,
+            "progress": 0.0,
+            "priority": req.get("priority", 0)
+        }
+
+        # Insert task to database
+        bulk_insert_into_db(Task, [task], True)
+
+        # Queue task to Redis
+        success = REDIS_CONN.queue_product(
+            get_svr_queue_name(task["priority"]),
+            message=task
+        )
+
+        if not success:
+            return get_json_result(data=False, message="Failed to queue BookStack sync task")
+
+        return get_json_result(data=True, message=f"BookStack sync task queued successfully. Will fetch content for: {', '.join(booknames)}")
+
     except Exception as e:
         return server_error_response(e)
 

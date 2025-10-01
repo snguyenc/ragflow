@@ -48,6 +48,7 @@ PARSERS = None
 HOST_IP = None
 HOST_PORT = None
 SECRET_KEY = None
+BOOKSTACK_CONFIG = None
 FACTORY_LLM_INFOS = None
 
 DATABASE_TYPE = os.getenv("DB_TYPE", "mysql")
@@ -195,6 +196,19 @@ def init_settings():
     if int(os.environ.get("SANDBOX_ENABLED", "0")):
         global SANDBOX_HOST
         SANDBOX_HOST = os.environ.get("SANDBOX_HOST", "sandbox-executor-manager")
+
+    # BookStack Connector Configuration
+    global BOOKSTACK_CONFIG
+    BOOKSTACK_CONFIG = {
+        "base_url": os.environ.get("BOOKSTACK_BASE_URL", ""),
+        "token_id": os.environ.get("BOOKSTACK_TOKEN_ID", ""),
+        "token_secret": os.environ.get("BOOKSTACK_TOKEN_SECRET", ""),
+        "batch_size": int(os.environ.get("BOOKSTACK_BATCH_SIZE", "50")),
+        "include_books": os.environ.get("BOOKSTACK_INCLUDE_BOOKS", "true").lower() == "true",
+        "include_chapters": os.environ.get("BOOKSTACK_INCLUDE_CHAPTERS", "true").lower() == "true",
+        "include_pages": os.environ.get("BOOKSTACK_INCLUDE_PAGES", "true").lower() == "true",
+        "include_shelves": os.environ.get("BOOKSTACK_INCLUDE_SHELVES", "true").lower() == "true"
+    }
 
     global SMTP_CONF, MAIL_SERVER, MAIL_PORT, MAIL_USE_SSL, MAIL_USE_TLS
     global MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER, MAIL_FRONTEND_URL
