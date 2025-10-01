@@ -34,7 +34,7 @@ from rag.nlp import search
 from api.constants import DATASET_NAME_LIMIT
 from rag.settings import PAGERANK_FLD
 from rag.utils.storage_factory import STORAGE_IMPL
-
+import logging
 
 @manager.route('/create', methods=['post'])  # noqa: F821
 @login_required
