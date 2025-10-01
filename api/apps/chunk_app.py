@@ -69,6 +69,7 @@ def list_chunk():
                     id].get(
                     "content_with_weight", ""),
                 "doc_id": sres.field[id]["doc_id"],
+                "location_id": sres.field[id]["location_id"],
                 "docnm_kwd": sres.field[id]["docnm_kwd"],
                 "important_kwd": sres.field[id].get("important_kwd", []),
                 "question_kwd": sres.field[id].get("question_kwd", []),

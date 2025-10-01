@@ -103,6 +103,7 @@ export interface IChunk {
   chunk_id: string;
   content_with_weight: string;
   doc_id: string;
+  location_id?: string;
   doc_name: string;
   image_id: string;
   important_kwd?: string[];
@@ -122,6 +123,7 @@ export interface ITestingChunk {
   image_id: string;
   important_kwd: any[];
   kb_id: string;
+  location_id?: string;
   similarity: number;
   term_similarity: number;
   vector: number[];

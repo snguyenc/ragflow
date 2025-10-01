@@ -3,6 +3,7 @@ import { memo } from 'react';
 import CSVFileViewer from './csv-preview';
 import { DocPreviewer } from './doc-preview';
 import { ExcelCsvPreviewer } from './excel-preview';
+import { HtmlPreviewer } from './html-preview';
 import { ImagePreviewer } from './image-preview';
 import styles from './index.less';
 import PdfPreviewer, { IProps } from './pdf-preview';
@@ -13,6 +14,7 @@ type PreviewProps = {
   fileType: string;
   className?: string;
   url: string;
+  selectedChunkId?: string;
 };
 const Preview = ({
   fileType,
@@ -20,6 +22,7 @@ const Preview = ({
   highlights,
   setWidthAndHeight,
   url,
+  selectedChunkId,
 }: PreviewProps & Partial<IProps>) => {
   return (
     <>
@@ -35,6 +38,16 @@ const Preview = ({
       {['doc', 'docx'].indexOf(fileType) > -1 && (
         <section>
           <DocPreviewer className={className} url={url} />
+        </section>
+      )}
+
+      {['bookstack'].indexOf(fileType) > -1 && (
+        <section>
+          <HtmlPreviewer
+            className={className}
+            url={url}
+            selectedChunkId={selectedChunkId}
+          />
         </section>
       )}
       {['txt', 'md'].indexOf(fileType) > -1 && (

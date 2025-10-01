@@ -215,6 +215,7 @@ const Chunk = () => {
                 highlights={highlights}
                 setWidthAndHeight={setWidthAndHeight}
                 url={fileUrl}
+                selectedChunkId={selectedChunkId}
               ></DocumentPreview>
             </section>
           </div>

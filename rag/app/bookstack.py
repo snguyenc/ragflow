@@ -415,7 +415,8 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
                 "revision_count": metadata.get("revision_count", 1),
                 "book_id": metadata.get("book_id", ""),
                 "chapter_id": metadata.get("chapter_id", ""),
-                "article_type_kwd":tags_map.get("ArticleType", "Topic")
+                "article_type_kwd":tags_map.get("ArticleType", "Topic"),
+                "location_id":metadata.get("url", "")
             }
             pages_metadata.append(page_meta)
             sections.append(page.content)

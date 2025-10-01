@@ -22,7 +22,7 @@ from pathlib import Path
 import flask
 from flask import request
 from flask_login import current_user, login_required
-
+import requests
 from api import settings
 from api.common.check_team_permission import check_kb_team_permission
 from api.constants import FILE_NAME_LEN_LIMIT, IMG_BASE64_PREFIX
@@ -47,7 +47,8 @@ from api.utils.web_utils import CONTENT_TYPE_MAP, html2pdf, is_valid_url
 from deepdoc.parser.html_parser import RAGFlowHtmlParser
 from rag.nlp import search
 from rag.utils.storage_factory import STORAGE_IMPL
-
+from bs4 import BeautifulSoup
+from flask import request
 
 @manager.route("/upload", methods=["POST"])  # noqa: F821
 @login_required
@@ -613,22 +614,52 @@ def rename():
 # @login_required
 def get(doc_id):
     try:
+        locationId = request.args.get('locationId')
         e, doc = DocumentService.get_by_id(doc_id)
         if not e:
             return get_data_error_result(message="Document not found!")
 
-        b, n = File2DocumentService.get_storage_address(doc_id=doc_id)
-        response = flask.make_response(STORAGE_IMPL.get(b, n))
+        if doc.suffix == "bookstack":
 
-        ext = re.search(r"\.([^.]+)$", doc.name.lower())
-        ext = ext.group(1) if ext else None
-        if ext:
-            if doc.type == FileType.VISUAL.value:
-                content_type = CONTENT_TYPE_MAP.get(ext, f"image/{ext}")
+            b, n = File2DocumentService.get_storage_address(doc_id=doc_id)
+            print("bucket", b, "name", n, locationId)
+            if locationId:
+                # get chunk
+                response = requests.get(locationId)
             else:
-                content_type = CONTENT_TYPE_MAP.get(ext, f"application/{ext}")
-            response.headers.set("Content-Type", content_type)
-        return response
+                response = requests.get(n)
+
+            soup = BeautifulSoup(response.content, "html5lib")
+            unwanted = ['script', 'nav', 'header', 'footer', 'aside']
+            for tag_name in unwanted:
+                for tag in soup.find_all(tag_name):
+                    tag.decompose()
+            nav_div = soup.find('div', id='sibling-navigation')
+            if nav_div:
+                nav_div.decompose()
+            nav_div = soup.find('div', class_="comments-container")
+            if nav_div:
+                nav_div.decompose()
+            for a_tag in soup.find_all('a'):
+                if a_tag.has_attr('href'):
+                    del a_tag['href']
+            response = flask.make_response(soup.prettify())
+            response.headers.set("Content-Type", "text/html")
+            return response
+        else:
+            b, n = File2DocumentService.get_storage_address(doc_id=doc_id)
+            print("bucket", b, "name", n)
+            response = flask.make_response(STORAGE_IMPL.get(b, n))
+
+            ext = re.search(r"\.([^.]+)$", doc.name.lower())
+            ext = ext.group(1) if ext else None
+            if ext:
+                if doc.type == FileType.VISUAL.value:
+                    content_type = CONTENT_TYPE_MAP.get(ext, f"image/{ext}")
+                else:
+                    content_type = CONTENT_TYPE_MAP.get(ext, f"application/{ext}")
+                response.headers.set("Content-Type", content_type)
+            return response
     except Exception as e:
         return server_error_response(e)
 
