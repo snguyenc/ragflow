@@ -183,10 +183,15 @@ class BookStackConnector:
         content = f"{title}\n\n{description}"
         url = self.client.build_app_url(f"/books/{book_data.get('slug', book_id)}")
 
-        updated_at = None
+        updated_at, created_at = None, None
         if book_data.get('updated_at'):
             try:
                 updated_at = datetime.fromisoformat(str(book_data['updated_at']).replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        if book_data.get('created_at'):
+            try:
+                created_at = datetime.fromisoformat(str(book_data['created_at']).replace('Z', '+00:00'))
             except ValueError:
                 pass
 
@@ -197,35 +202,7 @@ class BookStackConnector:
             url=url,
             doc_type="book",
             updated_at=updated_at,
-            metadata={
-                "bookstack_id": book_id,
-                "description": description
-            }
-        )
-
-    def _book_to_chapters(self, book_data: Dict[str, Any]) -> List[BookStackDocument]:
-        """Convert BookStack book to chapters"""
-        book_id = str(book_data.get('id', ''))
-        title = str(book_data.get('name', 'Untitled Book'))
-        description = str(book_data.get('description', ''))
-
-        content = f"{title}\n\n{description}"
-        url = self.client.build_app_url(f"/books/{book_data.get('slug', book_id)}")
-
-        updated_at = None
-        if book_data.get('updated_at'):
-            try:
-                updated_at = datetime.fromisoformat(str(book_data['updated_at']).replace('Z', '+00:00'))
-            except ValueError:
-                pass
-
-        return BookStackDocument(
-            doc_id=f"bookstack_book_{book_id}",
-            title=title,
-            content=content,
-            url=url,
-            doc_type="book",
-            updated_at=updated_at,
+            created_at=created_at,
             metadata={
                 "bookstack_id": book_id,
                 "description": description
@@ -235,27 +212,33 @@ class BookStackConnector:
     def _chapter_to_document(self, chapter_data: Dict[str, Any]) -> BookStackDocument:
         """Convert BookStack chapter to document"""
         chapter_id = str(chapter_data.get('id', ''))
-        title = str(chapter_data.get('name', 'Untitled Chapter'))
+        title = str(chapter_data.get('name', ''))
         description = str(chapter_data.get('description', ''))
 
         content = f"{title}\n\n{description}"
         url = self.client.build_app_url(
             f"/books/{chapter_data.get('book_slug', '')}/chapter/{chapter_data.get('slug', chapter_id)}")
 
-        updated_at = None
+        updated_at, created_at = None, None
         if chapter_data.get('updated_at'):
             try:
                 updated_at = datetime.fromisoformat(str(chapter_data['updated_at']).replace('Z', '+00:00'))
             except ValueError:
                 pass
+        if chapter_data.get('created_at'):
+            try:
+                created_at = datetime.fromisoformat(str(chapter_data['created_at']).replace('Z', '+00:00'))
+            except ValueError:
+                pass
 
         return BookStackDocument(
-            doc_id=f"bookstack_chapter_{chapter_id}",
+            doc_id=chapter_id,
             title=title,
             content=content,
             url=url,
             doc_type="chapter",
             updated_at=updated_at,
+            created_at=created_at,
             metadata={
                 "bookstack_id": chapter_id,
                 "book_id": str(chapter_data.get('book_id', '')),
@@ -272,10 +255,15 @@ class BookStackConnector:
         content = f"{title}\n\n{description}"
         url = self.client.build_app_url(f"/shelves/{shelf_data.get('slug', shelf_id)}")
 
-        updated_at = None
+        updated_at, created_at = None, None
         if shelf_data.get('updated_at'):
             try:
                 updated_at = datetime.fromisoformat(str(shelf_data['updated_at']).replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        if shelf_data.get('created_at'):
+            try:
+                created_at = datetime.fromisoformat(str(shelf_data['created_at']).replace('Z', '+00:00'))
             except ValueError:
                 pass
 
@@ -286,6 +274,7 @@ class BookStackConnector:
             url=url,
             doc_type="shelf",
             updated_at=updated_at,
+            created_at=created_at,
             metadata={
                 "bookstack_id": shelf_id,
                 "description": description
@@ -373,7 +362,7 @@ class BookStackConnector:
         if self.include_book_to_chapters:
             # Special handling for chapters_of_books since it needs book_names parameter
             get_chapters_from_books_fetcher = partial(self.client.get_chapters_from_books, book_names)
-            content_types.append(("chapters_of_books", self._book_to_chapters, get_chapters_from_books_fetcher))
+            content_types.append(("chapters_of_books", self._chapter_to_document, get_chapters_from_books_fetcher))
             
         for content_type, converter, fetcher in content_types:
             if progress_callback:
@@ -388,8 +377,6 @@ class BookStackConnector:
                         updated_since=updated_since,
                         updated_until=updated_until
                     )
-
-                    print("items", items)
 
                     if not items:
                         break

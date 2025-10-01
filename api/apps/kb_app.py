@@ -149,7 +149,7 @@ def update():
                     existing_docs = list(DocumentService.model.select().where(
                         DocumentService.model.kb_id == kb["id"],
                         DocumentService.model.type == FileType.BOOKSTACK,
-                        DocumentService.model.parser_id == "bookstack"
+                        DocumentService.model.parser_id == "bookstack_chapter_doc"
                     ))
 
                     if existing_docs:
