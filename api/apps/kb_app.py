@@ -162,7 +162,7 @@ def update():
                         logging.info(f"Updated existing BookStack document {virtual_doc.id} with new booknames: {booknames}")
                     else:
                         # Create new virtual document for BookStack content
-                        doc_name = f"Sync BookStack Chapters"
+                        doc_name = f"Sync BookStack Chapters.bookstack"
                         virtual_doc = DocumentService.insert({
                             "id": get_uuid(),
                             "kb_id": kb["id"],

@@ -74,8 +74,8 @@ async def run_bookstack_chapter_doc(task, progress_callback):
                     "parser_config": parser_config,
                     "created_by": "task_executor",
                     "type": FileType.DOC,
-                    "name": f"Chapter: {bookstack_doc.title}",
-                    "suffix": "chapter",
+                    "name": f"Chapter: {bookstack_doc.title}.bookstack",
+                    "suffix": "bookstack",
                     "location": bookstack_doc.url,
                     "metafields": {
                         "created_at": bookstack_doc.created_at,

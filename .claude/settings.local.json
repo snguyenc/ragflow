@@ -20,7 +20,8 @@
       "WebFetch(domain:docs.cognee.ai)",
       "WebFetch(domain:www.cognigy.com)",
       "Bash(grep:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(git apply:*)"
     ],
     "deny": [],
     "ask": []

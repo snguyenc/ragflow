@@ -442,14 +442,16 @@ async def embedding(docs, mdl, parser_config=None, callback=None):
     for d in docs:
         tts.append(d.get("docnm_kwd", "Title"))
         c = "\n".join(d.get("question_kwd", []))
-        if not c:
-            c = d["content_with_weight"]
+        #if not c:
+        c += d["content_with_weight"]
         c = re.sub(r"</?(table|td|caption|tr|th)( [^<>]{0,12})?>", " ", c)
         if not c:
             c = "None"
         cnts.append(c)
 
     tk_count = 0
+    #print("len(tts)", tts)
+    #print("len(cnts)", cnts)
     if len(tts) == len(cnts):
         vts, c = await trio.to_thread.run_sync(lambda: mdl.encode(tts[0: 1]))
         tts = np.concatenate([vts for _ in range(len(tts))], axis=0)

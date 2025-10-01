@@ -402,7 +402,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
         callback(0.8, "Finish fetching BookStack content.")
 
         for page in pages:
-            logging.info(f"BookStack page content: {page.content}")
+            #logging.info(f"BookStack page content: {page.content}")
             sections.append(page.content)
 
         callback(0.9, "Finish fetching BookStack content.")
