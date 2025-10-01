@@ -57,7 +57,7 @@ class Dealer:
 
     def get_filters(self, req):
         condition = dict()
-        for key, field in {"kb_ids": "kb_id", "doc_ids": "doc_id"}.items():
+        for key, field in {"kb_ids": "kb_id", "doc_ids": "doc_id", "books_id": "book_id", "chapters_id": "chapter_id", "pages_id": "page_id"}.items():
             if key in req and req[key] is not None:
                 condition[field] = req[key]
         # TODO(yzc): `available_int` is nullable however infinity doesn't support nullable columns.
@@ -73,6 +73,7 @@ class Dealer:
                rank_feature: dict | None = None
                ):
         filters = self.get_filters(req)
+        print("filters: ", filters)
         orderBy = OrderByExpr()
 
         pg = int(req.get("page", 1)) - 1

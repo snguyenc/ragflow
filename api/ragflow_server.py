@@ -140,7 +140,7 @@ if __name__ == '__main__':
         try:
             from rag.svr.bookstack_scheduler import start_bookstack_scheduler
             logging.info("Starting BookStack scheduler...")
-            #start_bookstack_scheduler()
+            start_bookstack_scheduler()
         except Exception as e:
             logging.warning(f"Failed to start BookStack scheduler: {str(e)}")
 

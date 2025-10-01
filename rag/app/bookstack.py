@@ -401,19 +401,23 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
         pages = fetch_bookstack_pages(parser_config, kwargs, callback)
         callback(0.8, "Finish fetching BookStack content.")
 
+        pages_metadata = []
+
         for page in pages:
             #logging.info(f"BookStack page content: {page.content}")
             metadata = page.metadata
-            doc["category_kwd"] = metadata.get("category", "")
-            doc["guide_kwd"] = metadata.get("guide", "")
-            doc["page_id"] = metadata.get("page_id", "")
-            doc["revision_count"] = metadata.get("revision_count", 1)
-            doc["book_id"] = metadata.get("book_id", "")
-            doc["chapter_id"] = metadata.get("chapter_id", "")
-            
             tags_map = {tag["name"]: tag["value"] for tag in metadata.get("tags", [])}
-            doc["article_type_kwd"] = tags_map.get("ArticleType", "Topic")
 
+            page_meta = {
+                "category_kwd": metadata.get("category", ""),
+                "guide_kwd": metadata.get("guide", ""),
+                "page_id": page.doc_id,
+                "revision_count": metadata.get("revision_count", 1),
+                "book_id": metadata.get("book_id", ""),
+                "chapter_id": metadata.get("chapter_id", ""),
+                "article_type_kwd":tags_map.get("ArticleType", "Topic")
+            }
+            pages_metadata.append(page_meta)
             sections.append(page.content)
 
         callback(0.9, "Finish fetching BookStack content.")
@@ -439,11 +443,18 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
 
         res.extend(tokenize_chunks_with_images(chunks, doc, is_english, images))
     else:
+        '''
         chunks = naive_merge(
             sections, int(parser_config.get(
                 "chunk_token_num", 128)), parser_config.get(
                 "delimiter", "\n!?。；！？"))
-        res.extend(tokenize_chunks(chunks, doc, is_english, pdf_parser))
+        '''
+        chunks = sections        
+        tk_chunks = tokenize_chunks(chunks, doc, is_english, pdf_parser)
+        #merge tk_chunks with pages_metadata
+        for idx, tk_chunk in enumerate(tk_chunks):
+            tk_chunk = {**tk_chunk, **pages_metadata[idx]}
+            res.append(tk_chunk)
 
     logging.info("naive_merge({}): {}".format(filename, timer() - st))
     return res

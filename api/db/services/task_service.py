@@ -90,6 +90,7 @@ class TaskService(CommonService):
             cls.model.from_page,
             cls.model.to_page,
             cls.model.retry_count,
+            cls.model.chunk_ids,
             Document.kb_id,
             Document.parser_id,
             Document.parser_config,
@@ -179,6 +180,29 @@ class TaskService(CommonService):
             chunk_ids (str): Space-separated string of chunk identifiers.
         """
         cls.model.update(chunk_ids=chunk_ids).where(cls.model.id == id).execute()
+
+    @classmethod
+    @DB.connection_context()
+    def merge_chunk_ids(cls, id: str, chunk_ids: str):
+        """Update the chunk IDs associated with a task.
+
+        This method updates the chunk_ids field of a task, which stores the IDs of
+        processed document chunks in a space-separated string format.
+
+        Args:
+            id (str): The unique identifier of the task.
+            chunk_ids (str): Space-separated string of chunk identifiers.
+        """
+        merge_chunk_ids = []
+
+        task = cls.model.get_by_id(id)
+        if task and task.chunk_ids:
+            merge_chunk_ids = task.chunk_ids.split(" ")
+
+        merge_chunk_ids.extend(chunk_ids.split(" "))
+        merge_chunk_ids_set = " ".join(set(merge_chunk_ids))    
+
+        cls.model.update(chunk_ids=merge_chunk_ids_set).where(cls.model.id == id).execute()
 
     @classmethod
     @DB.connection_context()

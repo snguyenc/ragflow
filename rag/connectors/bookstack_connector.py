@@ -388,6 +388,10 @@ class BookStackConnector:
 
         if self.include_book_to_chapters:
             # Special handling for chapters_of_books since it needs book_names parameter
+            if not book_names:
+                logging.warning("No book names provided for chapters_of_books")
+                return []
+
             get_chapters_from_books_fetcher = partial(self.client.get_chapters_from_books, book_names)
             content_types.append(("chapters_of_books", self._chapter_to_document, get_chapters_from_books_fetcher))    
         if self.include_books:
@@ -397,12 +401,18 @@ class BookStackConnector:
 
         # use for get pages base on chapters
         if self.include_chapter_to_pages:
-            print("chapter_id", chapter_id)
+            if not chapter_id:
+                logging.warning("No chapter id provided for chapter_to_pages")
+                return []
             get_chapter_to_pages_fetcher = partial(self.client.get_pages, chapter_id)
             content_types.append(("chapter_to_pages", self._page_to_document, get_chapter_to_pages_fetcher))    
         
         # use for check pages changes base on chapters
         if self.include_pages:
+            if not chapter_id:
+                logging.warning("No chapter id provided for pages")
+                return []
+                
             get_pages_fetcher = partial(self.client.get_pages, chapter_id)
             content_types.append(("pages", self._page_to_document_only, get_pages_fetcher))
             

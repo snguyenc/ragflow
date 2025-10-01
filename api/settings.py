@@ -176,7 +176,7 @@ def init_settings():
     OAUTH_CONFIG = get_base_config("oauth", {})
 
     global DOC_ENGINE, docStoreConn, retrievaler, kg_retrievaler
-    DOC_ENGINE = os.environ.get("DOC_ENGINE", "elasticsearch")
+    DOC_ENGINE = os.environ.get("DOC_ENGINE", "opensearch")
     # DOC_ENGINE = os.environ.get('DOC_ENGINE', "opensearch")
     lower_case_doc_engine = DOC_ENGINE.lower()
     if lower_case_doc_engine == "elasticsearch":

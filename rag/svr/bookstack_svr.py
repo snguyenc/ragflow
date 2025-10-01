@@ -202,6 +202,9 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
         tenant_id = kwargs.get("tenant_id")
         kb_id = kwargs.get("kb_id")
         doc_id = kwargs.get("doc_id")
+        task_id = kwargs.get("task_id")
+        pre_chunk_ids_str = kwargs.get("chunk_ids", "")
+        pre_chunk_ids = pre_chunk_ids_str.split(" ") if pre_chunk_ids_str else []
 
         chapter_id = parser_config.get("source_chapter_id")
         updated_at_str = parser_config.get("updated_at")
@@ -214,18 +217,13 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
             return []
         
         doc = doc.to_dict()    
-        prev_tasks = TaskService.get_tasks(doc_id)
-        pre_chunk_ids = []
-        if prev_tasks:
-            for pre_task in prev_tasks:
-                pre_chunk_ids.extend(pre_task["chunk_ids"].split())
-            
         
         updated_at = datetime.fromisoformat(updated_at_str) if len(pre_chunk_ids) > 0 and updated_at_str else None
 
         doc_count = 0
         docs = []
-
+        book_id = ""
+        update_page_ids = []
         
         for batch in connector.fetch_documents(chapter_id=chapter_id, updated_since=updated_at):
             for bookstack_doc in batch:
@@ -236,17 +234,76 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
                     **parser_config
                 }
                 docs.append(bookstack_doc)
-                # check and delete old chunk
-                if settings.docStoreConn.indexExist(search.index_name(tenant_id), kb_id):
-                    logging.info(f"Delete old chunk: {bookstack_doc.metadata['chapter_id']}, {bookstack_doc.metadata['page_id']}")
-                    settings.docStoreConn.delete({"doc_id": doc_id, "chapter_id": bookstack_doc.metadata['chapter_id'], "page_id": bookstack_doc.metadata['page_id']}, 
-                    search.index_name(tenant_id), kb_id)
+                book_id = bookstack_doc.metadata['book_id']
+                update_page_ids.append(f"{chapter_id}-{bookstack_doc.doc_id}")
 
-        logging.info(f"Fetching pages from BookStack: {updated_at}, {docs}")
+        
+        logging.info(f"Got {len(docs)} pages changes {update_page_ids}")
+        #search all chunk with book_id and chapter_id
+        try: 
+            if len(docs) > 0:
+                deleted_chunk_ids = []
+                query = {
+                    "doc_ids": [doc_id],
+                    "books_id": [book_id],
+                    "chapters_id": [chapter_id],
+                    "fields": ["doc_id","book_id", "chapter_id", "page_id"]
+                }
+                sres = settings.retrievaler.search(query, search.index_name(tenant_id), [kb_id])
+                print("Search result: ", sres)
+                if sres.total > 0:
+                    for id in sres.ids:
+                        doc_rs = sres.field[id]
+                        rm_key = f"{doc_rs['chapter_id']}-{doc_rs['page_id']}"
+                        if rm_key in update_page_ids:
+                            deleted_chunk_ids.append(id)
+                            pre_chunk_ids.remove(id)
+
+                    if len(deleted_chunk_ids) > 0:
+                        chunk_number = len(deleted_chunk_ids)
+
+                        logging.info(f"Delete old chunk: {deleted_chunk_ids}")
+                        settings.docStoreConn.delete({"id": deleted_chunk_ids}, search.index_name(tenant_id), kb_id)
+
+                        from rag.utils.storage_factory import STORAGE_IMPL
+                        DocumentService.decrement_chunk_num(doc_id, kb_id, 1, chunk_number, 0)
+                        for cid in deleted_chunk_ids:
+                            if STORAGE_IMPL.obj_exist(kb_id, cid):
+                                STORAGE_IMPL.rm(kb_id, cid)
+
+                chunk_ids_str = " ".join(pre_chunk_ids)
+                logging.info(f"Update chunk ids: {chunk_ids_str}")
+                TaskService.update_chunk_ids(task_id, chunk_ids_str)   
+
+        except Exception as e:
+            logging.error(f"Error delete old chunk: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        logging.info(f"Fetching pages from BookStack: {updated_at}, {len(docs)}")
         return docs
 
     except Exception as e:
         callback(-1, f"BookStack chapter fetch error: {str(e)}")
         logging.error(f"BookStack chapter fetch error: {str(e)}")
         raise
+
+if __name__ == "__main__":
+    # Initialize connector   
+    try:
+        settings.init_settings()
+        query = {
+            "doc_ids": ["a98fa89096a511f09d1151595cdd3d37"],
+            "books_id": ["5"],
+            "chapters_id": ["10"],
+            "fields": ["doc_id","book_id", "chapter_id", "page_id", "content"]
+        }
+       
+        sres = settings.retrievaler.search(query, search.index_name("87fec81c92ab11f091fc85c4f939180f"), ["bc6f672896a211f0a47851dd3f8aec5b"])
+        
+        print(sres)
+    except Exception as e:
+        print(f"Error calling fetch_documents(): {e}")
+        import traceback
+        traceback.print_exc()
 

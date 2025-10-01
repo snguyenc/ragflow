@@ -27,8 +27,9 @@ from api.utils import get_uuid
 from api import settings
 from rag.connectors.bookstack_connector import BookStackConnector
 from rag.utils.redis_conn import REDIS_CONN
-
-
+from api.db.services.file2document_service import File2DocumentService
+from api.db.services.task_service import queue_tasks
+from api.db import FileType
 class BookStackScheduler:
     """
     Scheduler để sync BookStack content định kỳ
@@ -79,153 +80,29 @@ class BookStackScheduler:
         """Check BookStack for updates"""
         try:
             logging.info("Checking BookStack for updates...")
+            existing_docs = list(DocumentService.model.select().where(
+                DocumentService.model.type == FileType.BOOKSTACK,
+                DocumentService.model.parser_id == "bookstack_chapter_doc"
+            ))
 
-            # Get all BookStack documents directly
-            bookstack_docs = self._get_bookstack_documents()
+            if existing_docs:
+                for doc in existing_docs:
+                    doc_dict = doc.to_dict()
+                    parser_config = doc_dict.get("parser_config")
+                    from datetime import timezone
+                    parser_config["updated_at"] = doc_dict.get("update_date").astimezone(tz=timezone.utc).isoformat()
+                    
+                    DocumentService.update_parser_config(doc.id, parser_config)
+                    bucket, name = File2DocumentService.get_storage_address(doc_id=doc_dict["id"])
+                    queue_tasks(doc_dict, bucket, name, 0)
 
-            for doc in bookstack_docs:
-                if self._check_document_updates(doc):
-                    self._schedule_document_update(doc)
+            
 
         except Exception as e:
             logging.exception(f"Error checking BookStack updates: {str(e)}")
 
 
-    def _get_bookstack_documents(self) -> List[Dict[str, Any]]:
-        """Get all BookStack documents"""
-        try:
-            from api.db.services.document_service import DocumentService
 
-            # Query trực tiếp documents có parser_id = "bookstack"
-            bookstack_docs = list(DocumentService.model.select().where(
-                DocumentService.model.parser_id == "bookstack"
-            ).dicts())
-
-            logging.info(f"Found {len(bookstack_docs)} BookStack documents")
-            return bookstack_docs
-
-        except Exception as e:
-            logging.exception(f"Error getting BookStack documents: {str(e)}")
-            return []
-
-    def _check_document_updates(self, doc: Dict[str, Any]) -> bool:
-        """Check if document has updates"""
-        try:
-            parser_config = doc.get("parser_config", {})
-            source_chapter_id = parser_config.get("source_chapter_id")
-
-            if not source_chapter_id:
-                return False
-
-            # Get BookStack config
-            global_config = settings.BOOKSTACK_CONFIG or {}
-            if not global_config:
-                logging.warning("No BookStack config found")
-                return False
-
-            # Initialize connector
-            connector = BookStackConnector(
-                base_url=global_config["base_url"],
-                token_id=global_config["token_id"],
-                token_secret=global_config["token_secret"]
-            )
-
-            # Get chapter info from BookStack
-            try:
-                chapter_data = connector.client.get_chapter_content(source_chapter_id)
-                bookstack_updated_at = datetime.fromisoformat(
-                    str(chapter_data.get('updated_at', '')).replace('Z', '+00:00')
-                )
-
-                # Compare với updated_at của document
-                doc_updated_at = doc.get("update_time")
-                if doc_updated_at:
-                    if isinstance(doc_updated_at, str):
-                        doc_updated_at = datetime.fromisoformat(doc_updated_at)
-
-                    # Nếu BookStack update sau document update time
-                    if bookstack_updated_at > doc_updated_at:
-                        logging.info(f"Document {doc['id']} has updates: BookStack={bookstack_updated_at}, Doc={doc_updated_at}")
-                        return True
-
-            except Exception as e:
-                logging.warning(f"Error checking document {doc['id']} updates: {str(e)}")
-                return False
-
-            return False
-
-        except Exception as e:
-            logging.exception(f"Error checking document updates: {str(e)}")
-            return False
-
-    def _schedule_document_update(self, doc: Dict[str, Any]):
-        """Schedule update task cho single document"""
-        try:
-            task_data = {
-                "id": get_uuid(),
-                "doc_id": doc["id"],
-                "kb_id": doc["kb_id"],
-                "tenant_id": doc["tenant_id"],
-                "name": doc["name"],
-                "parser_id": doc["parser_id"],
-                "parser_config": doc["parser_config"],
-                "from_page": 0,
-                "to_page": -1,
-                "create_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "progress": 0.0,
-                "progress_msg": "Scheduled for BookStack sync",
-                "created_by": "bookstack_scheduler"
-            }
-
-            # Insert task
-            TaskService.insert(task_data)
-
-            # Queue task for page-level sync
-            REDIS_CONN.queue_product("task_executor", {
-                "id": task_data["id"],
-                "task_type": "bookstack"  # For page updates
-            })
-
-            logging.info(f"Scheduled update task for document {doc['id']}: {doc['name']}")
-
-        except Exception as e:
-            logging.exception(f"Error scheduling document update: {str(e)}")
-
-    def _schedule_document_updates(self, docs: List[Dict[str, Any]]):
-        """Schedule update tasks cho documents"""
-        try:
-            for doc in docs:
-                task_data = {
-                    "id": get_uuid(),
-                    "doc_id": doc["id"],
-                    "kb_id": doc["kb_id"],
-                    "tenant_id": doc["tenant_id"],
-                    "name": doc["name"],
-                    "parser_id": doc["parser_id"],
-                    "parser_config": doc["parser_config"],
-                    "from_page": 0,
-                    "to_page": -1,
-                    "create_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "progress": 0.0,
-                    "progress_msg": "Scheduled for BookStack sync",
-                    "created_by": "bookstack_scheduler"
-                }
-
-                # Insert task
-                TaskService.insert(task_data)
-
-                # Queue task
-                REDIS_CONN.queue_product("task_executor", {
-                    "id": task_data["id"],
-                    "task_type": "chunk"
-                })
-
-                logging.info(f"Scheduled update task for document {doc['id']}: {doc['name']}")
-
-        except Exception as e:
-            logging.exception(f"Error scheduling document updates: {str(e)}")
 
 # Global scheduler instance
 bookstack_scheduler = BookStackScheduler()
