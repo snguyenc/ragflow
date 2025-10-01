@@ -30,3 +30,8 @@ Khi fork một repo:
   # Tạo PR từ fix/my-fix → upstream/main
 
   Vậy main của fork nên giữ sạch để luôn sync với repo gốc, còn làm việc thì tạo branch riêng.
+
+
+    # Xóa branch fix nếu không cần nữa
+  git branch -d fix/my-fix
+  git push origin --delete fix/my-fix
