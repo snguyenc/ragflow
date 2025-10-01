@@ -329,7 +329,7 @@ class BookStackConnector:
             return BookStackDocument(
                 doc_id=page_id,
                 title=title,
-                content=f"{title}\n\n{md_content}",
+                content=f"{md_content}",
                 url=url,
                 doc_type=content_type,
                 updated_at=updated_at,

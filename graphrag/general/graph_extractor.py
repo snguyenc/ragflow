@@ -97,10 +97,11 @@ class GraphExtractor(Extractor):
             self._entity_types_key: ",".join(entity_types),
         }
 
-    async def _process_single_content(self, chunk_key_dp: tuple[str, str], chunk_seq: int, num_chunks: int, out_results):
+    async def _process_single_content(self, chunk_key_dp: tuple[str, str, str], chunk_seq: int, num_chunks: int, out_results):
         token_count = 0
         chunk_key = chunk_key_dp[0]
         content = chunk_key_dp[1]
+        meta = {"hierarchy_path": chunk_key_dp[2]}
         variables = {
             **self._prompt_variables,
             self._input_text_key: content,
@@ -144,7 +145,7 @@ class GraphExtractor(Extractor):
                 continue
             rcds.append(record.group(1))
         records = rcds
-        maybe_nodes, maybe_edges = self._entities_and_relations(chunk_key, records, self._prompt_variables[self._tuple_delimiter_key])
+        maybe_nodes, maybe_edges = self._entities_and_relations(chunk_key, meta,records, self._prompt_variables[self._tuple_delimiter_key])
         out_results.append((maybe_nodes, maybe_edges, token_count))
         if self.callback:
             self.callback(0.5+0.1*len(out_results)/num_chunks, msg = f"Entities extraction of chunk {chunk_seq} {len(out_results)}/{num_chunks} done, {len(maybe_nodes)} nodes, {len(maybe_edges)} edges, {token_count} tokens.")

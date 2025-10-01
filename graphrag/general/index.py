@@ -54,8 +54,10 @@ async def run_graphrag(
     start = trio.current_time()
     tenant_id, kb_id, doc_id = row["tenant_id"], str(row["kb_id"]), row["doc_id"]
     chunks = []
-    for d in settings.retrievaler.chunk_list(doc_id, tenant_id, [kb_id], fields=["content_with_weight", "doc_id"]):
+    chunks_meta = []
+    for d in settings.retrievaler.chunk_list(doc_id, tenant_id, [kb_id], fields=["content_with_weight", "doc_id", "hierarchy_path_kwd"]):
         chunks.append(d["content_with_weight"])
+        chunks_meta.append(d.get("hierarchy_path_kwd", ""))
 
     with trio.fail_after(max(120, len(chunks) * 60 * 10) if enable_timeout_assertion else 10000000000):
         subgraph = await generate_subgraph(
@@ -64,6 +66,7 @@ async def run_graphrag(
             kb_id,
             doc_id,
             chunks,
+            chunks_meta,
             language,
             row["kb_parser_config"]["graphrag"].get("entity_types", []),
             chat_model,
@@ -131,6 +134,7 @@ async def generate_subgraph(
     kb_id: str,
     doc_id: str,
     chunks: list[str],
+    chunks_meta: list[str],
     language,
     entity_types,
     llm_bdl,
@@ -147,7 +151,7 @@ async def generate_subgraph(
         language=language,
         entity_types=entity_types,
     )
-    ents, rels = await ext(doc_id, chunks, callback)
+    ents, rels = await ext(doc_id, chunks, chunks_meta, callback)
     subgraph = nx.Graph()
     for ent in ents:
         assert "description" in ent, f"entity {ent} does not have description"

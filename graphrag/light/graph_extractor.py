@@ -71,10 +71,13 @@ class GraphExtractor(Extractor):
         self._left_token_count = llm_invoker.max_length - num_tokens_from_string(self._entity_extract_prompt.format(**self._context_base, input_text=""))
         self._left_token_count = max(llm_invoker.max_length * 0.6, self._left_token_count)
 
-    async def _process_single_content(self, chunk_key_dp: tuple[str, str], chunk_seq: int, num_chunks: int, out_results):
+    async def _process_single_content(self, chunk_key_dp: tuple[str, str, str], chunk_seq: int, num_chunks: int, out_results):
         token_count = 0
         chunk_key = chunk_key_dp[0]
         content = chunk_key_dp[1]
+        metas = {
+            "hierarchy_path": chunk_key_dp[2],
+        }
         hint_prompt = self._entity_extract_prompt.format(**self._context_base, input_text=content)
 
         gen_conf = {}
@@ -122,7 +125,7 @@ class GraphExtractor(Extractor):
                 continue
             rcds.append(record.group(1))
         records = rcds
-        maybe_nodes, maybe_edges = self._entities_and_relations(chunk_key, records, self._context_base["tuple_delimiter"])
+        maybe_nodes, maybe_edges = self._entities_and_relations(chunk_key, metas, records, self._context_base["tuple_delimiter"])
         out_results.append((maybe_nodes, maybe_edges, token_count))
         if self.callback:
             self.callback(

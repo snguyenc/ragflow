@@ -82,42 +82,42 @@ class Extractor:
 
         return response
 
-    def _entities_and_relations(self, chunk_key: str, records: list, tuple_delimiter: str):
+    def _entities_and_relations(self, chunk_key: str, chunk_meta: dict, records: list, tuple_delimiter: str):
         maybe_nodes = defaultdict(list)
         maybe_edges = defaultdict(list)
         ent_types = [t.lower() for t in self._entity_types]
         for record in records:
             record_attributes = split_string_by_multi_markers(record, [tuple_delimiter])
 
-            if_entities = handle_single_entity_extraction(record_attributes, chunk_key)
+            if_entities = handle_single_entity_extraction(record_attributes, chunk_key, chunk_meta)
             if if_entities is not None and if_entities.get("entity_type", "unknown").lower() in ent_types:
                 maybe_nodes[if_entities["entity_name"]].append(if_entities)
                 continue
 
-            if_relation = handle_single_relationship_extraction(record_attributes, chunk_key)
+            if_relation = handle_single_relationship_extraction(record_attributes, chunk_key, chunk_meta)
             if if_relation is not None:
                 maybe_edges[(if_relation["src_id"], if_relation["tgt_id"])].append(if_relation)
         return dict(maybe_nodes), dict(maybe_edges)
 
-    async def __call__(self, doc_id: str, chunks: list[str], callback: Callable | None = None):
+    async def __call__(self, doc_id: str, chunks: list[str], chunks_meta: list[str],callback: Callable | None = None):
         self.callback = callback
         start_ts = trio.current_time()
 
-        async def extract_all(doc_id, chunks, max_concurrency=MAX_CONCURRENT_PROCESS_AND_EXTRACT_CHUNK):
+        async def extract_all(doc_id, chunks, chunks_meta, max_concurrency=MAX_CONCURRENT_PROCESS_AND_EXTRACT_CHUNK):
             out_results = []
             limiter = trio.Semaphore(max_concurrency)
 
-            async def worker(chunk_key_dp: tuple[str, str], idx: int, total: int):
+            async def worker(chunk_key_dp: tuple[str, str, str], idx: int, total: int):
                 async with limiter:
                     await self._process_single_content(chunk_key_dp, idx, total, out_results)
 
             async with trio.open_nursery() as nursery:
                 for i, ck in enumerate(chunks):
-                    nursery.start_soon(worker, (doc_id, ck), i, len(chunks))
+                    nursery.start_soon(worker, (doc_id, ck, chunks_meta[i]), i, len(chunks))
 
             return out_results
 
-        out_results = await extract_all(doc_id, chunks, max_concurrency=MAX_CONCURRENT_PROCESS_AND_EXTRACT_CHUNK)
+        out_results = await extract_all(doc_id, chunks, chunks_meta, max_concurrency=MAX_CONCURRENT_PROCESS_AND_EXTRACT_CHUNK)
 
         maybe_nodes = defaultdict(list)
         maybe_edges = defaultdict(list)
@@ -169,13 +169,15 @@ class Extractor:
             key=lambda x: x[1],
             reverse=True,
         )[0][0]
-        description = GRAPH_FIELD_SEP.join(sorted(set([dp["description"] for dp in entities])))
+        description = GRAPH_FIELD_SEP.join(sorted(set(["Source: " + dp["hierarchy_path"] + ", Content: " + dp["description"] for dp in entities])))
         already_source_ids = flat_uniq_list(entities, "source_id")
+        already_source_hierarchies = flat_uniq_list(entities, "hierarchy_path")
         description = await self._handle_entity_relation_summary(entity_name, description)
         node_data = dict(
             entity_type=entity_type,
             description=description,
             source_id=already_source_ids,
+            hierarchy_path=already_source_hierarchies,
         )
         node_data["entity_name"] = entity_name
         all_relationships_data.append(node_data)
@@ -184,11 +186,12 @@ class Extractor:
         if not edges_data:
             return
         weight = sum([edge["weight"] for edge in edges_data])
-        description = GRAPH_FIELD_SEP.join(sorted(set([edge["description"] for edge in edges_data])))
+        description = GRAPH_FIELD_SEP.join(sorted(set(["Source: " + edge["hierarchy_path"] + ", Content: " + edge["description"] for edge in edges_data])))
         description = await self._handle_entity_relation_summary(f"{src_id} -> {tgt_id}", description)
         keywords = flat_uniq_list(edges_data, "keywords")
         source_id = flat_uniq_list(edges_data, "source_id")
-        edge_data = dict(src_id=src_id, tgt_id=tgt_id, description=description, keywords=keywords, weight=weight, source_id=source_id)
+        source_hierarchies = flat_uniq_list(edges_data, "hierarchy_path")
+        edge_data = dict(src_id=src_id, tgt_id=tgt_id, description=description, keywords=keywords, weight=weight, source_id=source_id, hierarchy_path=source_hierarchies)
         all_relationships_data.append(edge_data)
 
     async def _merge_graph_nodes(self, graph: nx.Graph, nodes: list[str], change: GraphChange):
@@ -204,6 +207,7 @@ class Extractor:
             node1_attrs = graph.nodes[node1]
             node0_attrs["description"] += f"{GRAPH_FIELD_SEP}{node1_attrs['description']}"
             node0_attrs["source_id"] = sorted(set(node0_attrs["source_id"] + node1_attrs["source_id"]))
+            node0_attrs["hierarchy_path"] = sorted(set(node0_attrs["hierarchy_path"] + node1_attrs["hierarchy_path"]))
             for neighbor in graph.neighbors(node1):
                 change.removed_edges.add(get_from_to(node1, neighbor))
                 if neighbor not in nodes_set:

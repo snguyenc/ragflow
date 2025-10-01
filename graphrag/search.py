@@ -166,10 +166,10 @@ class KGSearch(Dealer):
         ty_kwds = []
         try:
             ty_kwds, ents = self.query_rewrite(llm, qst, [index_name(tid) for tid in tenant_ids], kb_ids)
-            if meta_keywords:
-                ty_kwds = meta_keywords
+            if meta_keywords and ents:
+                ents += meta_keywords
                 
-            logging.info(f"Q: {qst}, Types: {ty_kwds}, Entities: {ents}, ")
+            logging.info(f"Q: {qst}, Types: {ty_kwds}, Entities: {ents}, ent_topn: {ent_topn}, rel_topn: {rel_topn}")
         except Exception as e:
             logging.exception(e)
             ents = [qst]
@@ -246,11 +246,12 @@ class KGSearch(Dealer):
             if ent_pagerank < 1:
                 ent_pagerank = 1
                 
-            print("ent_pagerank", ent_pagerank, "sim", ent["sim"])
+            #print("ent_pagerank", ent_pagerank, "sim", ent["sim"])
+            descJson = json.loads(ent["description"])
             ents.append({
                 "Entity": n,
                 "Score": "%.2f" % (ent["sim"] * ent_pagerank),
-                "Description": json.loads(ent["description"]).get("description", "") if ent["description"] else ""
+                 "Description(Source, Content)": descJson.get("description", "") if descJson else ""
             })
             max_token -= num_tokens_from_string(str(ents[-1]))
             if max_token <= 0:
@@ -267,15 +268,18 @@ class KGSearch(Dealer):
                     continue
                 rel["description"] = rela["description"]
             desc = rel["description"]
+            source = []
             try:
-                desc = json.loads(desc).get("description", "")
+                descJson = json.loads(desc)
+                desc = descJson.get("description", "")
+                source = descJson.get("hierarchy_path", [])
             except Exception:
                 pass
             relas.append({
                 "From Entity": f,
                 "To Entity": t,
                 "Score": "%.2f" % (rel["sim"] * rel["pagerank"]),
-                "Description": desc
+                "Description(Source, Content)": desc
             })
             max_token -= num_tokens_from_string(str(relas[-1]))
             if max_token <= 0:

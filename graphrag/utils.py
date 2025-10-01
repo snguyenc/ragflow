@@ -239,6 +239,7 @@ def compute_args_hash(*args):
 def handle_single_entity_extraction(
     record_attributes: list[str],
     chunk_key: str,
+    chunk_meta: dict,
 ):
     if len(record_attributes) < 4 or record_attributes[0] != '"entity"':
         return None
@@ -249,15 +250,17 @@ def handle_single_entity_extraction(
     entity_type = clean_str(record_attributes[2].upper())
     entity_description = clean_str(record_attributes[3])
     entity_source_id = chunk_key
+    hierarchy_path = chunk_meta.get("hierarchy_path", "")
     return dict(
         entity_name=entity_name.upper(),
         entity_type=entity_type.upper(),
         description=entity_description,
         source_id=entity_source_id,
+        hierarchy_path=hierarchy_path,
     )
 
 
-def handle_single_relationship_extraction(record_attributes: list[str], chunk_key: str):
+def handle_single_relationship_extraction(record_attributes: list[str], chunk_key: str, chunk_meta: dict):
     if len(record_attributes) < 5 or record_attributes[0] != '"relationship"':
         return None
     # add this record as edge
@@ -276,7 +279,8 @@ def handle_single_relationship_extraction(record_attributes: list[str], chunk_ke
         description=edge_description,
         keywords=edge_keywords,
         source_id=edge_source_id,
-        metadata={"created_at": time.time()},
+        hierarchy_path=chunk_meta.get("hierarchy_path", ""),
+        metadata={"created_at": time.time(), **chunk_meta},
     )
 
 
@@ -304,6 +308,7 @@ def chunk_id(chunk):
 async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks):
     global chat_limiter
     enable_timeout_assertion = os.environ.get("ENABLE_TIMEOUT_ASSERTION")
+    hierarchy_path = meta.get("hierarchy_path", [])
     chunk = {
         "id": get_uuid(),
         "important_kwd": [ent_name],
@@ -314,17 +319,22 @@ async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks):
         "content_with_weight": json.dumps(meta, ensure_ascii=False),
         "content_ltks": rag_tokenizer.tokenize(meta["description"]),
         "source_id": meta["source_id"],
+        "source_path_kwd": hierarchy_path,
         "kb_id": kb_id,
         "available_int": 0,
     }
+    print("graph_node_to_chunk", meta)
     chunk["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(chunk["content_ltks"])
-    ebd = get_embed_cache(embd_mdl.llm_name, ent_name)
+    #include source in entity name for semantic search
+    encode_entity_name = "\n".join(hierarchy_path) + ":" + ent_name 
+    
+    ebd = get_embed_cache(embd_mdl.llm_name, encode_entity_name)
     if ebd is None:
         async with chat_limiter:
             with trio.fail_after(3 if enable_timeout_assertion else 30000000):
-                ebd, _ = await trio.to_thread.run_sync(lambda: embd_mdl.encode([ent_name]))
+                ebd, _ = await trio.to_thread.run_sync(lambda: embd_mdl.encode([encode_entity_name]))
         ebd = ebd[0]
-        set_embed_cache(embd_mdl.llm_name, ent_name, ebd)
+        set_embed_cache(embd_mdl.llm_name, encode_entity_name, ebd)
     assert ebd is not None
     chunk["q_%d_vec" % len(ebd)] = ebd
     chunks.append(chunk)
@@ -354,6 +364,7 @@ def get_relation(tenant_id, kb_id, from_ent_name, to_ent_name, size=1):
 
 async def graph_edge_to_chunk(kb_id, embd_mdl, from_ent_name, to_ent_name, meta, chunks):
     enable_timeout_assertion = os.environ.get("ENABLE_TIMEOUT_ASSERTION")
+    hierarchy_path = meta.get("hierarchy_path", [])
     chunk = {
         "id": get_uuid(),
         "from_entity_kwd": from_ent_name,
@@ -363,17 +374,21 @@ async def graph_edge_to_chunk(kb_id, embd_mdl, from_ent_name, to_ent_name, meta,
         "content_ltks": rag_tokenizer.tokenize(meta["description"]),
         "important_kwd": meta["keywords"],
         "source_id": meta["source_id"],
+        "source_path_kwd": hierarchy_path,
         "weight_int": int(meta["weight"]),
         "kb_id": kb_id,
         "available_int": 0,
     }
+    print("graph_edge_to_chunk", meta)
     chunk["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(chunk["content_ltks"])
-    txt = f"{from_ent_name}->{to_ent_name}"
+    #source already in descriptions
+    txt = f":{from_ent_name}->{to_ent_name}:{meta['description']}"
+    
     ebd = get_embed_cache(embd_mdl.llm_name, txt)
     if ebd is None:
         async with chat_limiter:
             with trio.fail_after(3 if enable_timeout_assertion else 300000000):
-                ebd, _ = await trio.to_thread.run_sync(lambda: embd_mdl.encode([txt + f": {meta['description']}"]))
+                ebd, _ = await trio.to_thread.run_sync(lambda: embd_mdl.encode([txt]))
         ebd = ebd[0]
         set_embed_cache(embd_mdl.llm_name, txt, ebd)
     assert ebd is not None
@@ -430,7 +445,6 @@ async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, chang
     global chat_limiter
     start = trio.current_time()
 
-    print("delete set_graph", search.index_name(tenant_id), kb_id)
     await trio.to_thread.run_sync(settings.docStoreConn.delete, {"knowledge_graph_kwd": ["graph", "subgraph"]}, search.index_name(tenant_id), kb_id)
 
     if change.removed_nodes:

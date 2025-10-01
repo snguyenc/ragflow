@@ -249,13 +249,18 @@ def fetch_bookstack_pages(parser_config, kwargs, callback):
             for bookstack_doc in batch:
                 doc_count += 1
                 callback(0.4 + 0.5 * doc_count / 100, f"Processing {bookstack_doc.doc_type}: {bookstack_doc.title}")
-                bookstack_doc.metadata = {
-                    **bookstack_doc.metadata,
-                    **parser_config
-                }
+                
                 title = bookstack_doc.title
                 content = bookstack_doc.content
-                bookstack_doc.content = f"{category} / {guide} / {title}\n\n{content}"
+                hierarchy_path = f"{category} > {guide} > {title}"
+                
+                bookstack_doc.metadata = {
+                    **bookstack_doc.metadata,
+                    **parser_config,
+                    "hierarchy_path": hierarchy_path
+                }
+                
+                bookstack_doc.content = f"{hierarchy_path}\n\n{content}"
 
                 docs.append(bookstack_doc)
                 book_id = bookstack_doc.metadata['book_id']
