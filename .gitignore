@@ -195,3 +195,5 @@ dist
 
 # Default backup dir
 backup
+.bmad-core/
+.claude/
